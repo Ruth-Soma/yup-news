@@ -193,20 +193,20 @@ export async function incrementPostViews(postId, country = null, countryCode = n
 }
 
 // ─── MARKET POSTS ─────────────────────────────────────────────────────────────
-// Fetches business + finance + breaking-news for the Markets page
+// Fetches business + finance + breaking-news ONLY (no politics) for the Markets page
 
-export async function getMarketPosts({ page = 1 } = {}) {
-  const from = (page - 1) * PAGE_SIZE
-  const to = from + PAGE_SIZE - 1
+export async function getMarketPosts({ page = 1, pageSize = 20 } = {}) {
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
   const { data, error, count } = await supabase
     .from('posts')
     .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, tags, source_name, views, published_at, comments(count)', { count: 'exact' })
     .eq('status', 'published')
     .lte('published_at', new Date().toISOString())
-    .in('category', ['business', 'finance', 'breaking-news', 'politics'])
+    .in('category', ['business', 'finance', 'breaking-news'])
     .order('published_at', { ascending: false })
     .range(from, to)
-  return { data: data || [], error, count, totalPages: Math.ceil((count || 0) / PAGE_SIZE) }
+  return { data: data || [], error, count, totalPages: Math.ceil((count || 0) / pageSize) }
 }
 
 export async function getViewsByCountry(daysBack = 30) {

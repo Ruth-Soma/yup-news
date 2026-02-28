@@ -193,7 +193,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-paper border-b border-g200">
-      <div className="flex items-center justify-between px-6 md:px-12 h-[60px]">
+      <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 lg:px-12 h-[60px]">
 
         {/* Logo */}
         <Link
@@ -226,10 +226,10 @@ export default function Header() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `text-[0.7rem] font-sans font-medium uppercase tracking-[0.12em] px-4 h-[60px] flex items-center transition-colors border-b-[2px] ${
+                  `text-[0.7rem] font-sans font-medium uppercase tracking-[0.12em] px-3 lg:px-4 h-[60px] flex items-center transition-all border-b-[2px] ${
                     isActive
                       ? 'text-ink border-ink'
-                      : 'text-g500 border-transparent hover:text-ink'
+                      : 'text-g500 border-transparent hover:text-ink hover:bg-g100'
                   }`
                 }
               >
@@ -294,7 +294,7 @@ export default function Header() {
 
       {/* Search bar */}
       {searchOpen && (
-        <div className="border-t border-g200 px-12">
+        <div className="border-t border-g200 px-4 sm:px-6 md:px-8 lg:px-12">
           <form onSubmit={handleSearch} className="flex items-center gap-3 h-[48px]">
             <Search size={14} className="text-g400 shrink-0" strokeWidth={1.7} />
             <input
