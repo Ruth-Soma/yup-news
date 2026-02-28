@@ -390,7 +390,10 @@ export default function Home() {
   // so show posts starting from index 0 in the grid. Until then fall back to
   // posts[0] as the hero and start the grid from index 1.
   const smartHero = candidates.length > 0
-  const latestPosts = posts.slice(smartHero ? 0 : 1, smartHero ? 6 : 7)
+  // "Latest Stories" always uses date-ordered feed so it shows the most
+  // recently published articles regardless of hot-score ranking.
+  const dateOrderedPosts = filteredFeed.posts
+  const latestPosts = dateOrderedPosts.slice(smartHero ? 0 : 1, smartHero ? 6 : 7)
   const longReads = posts.slice(smartHero ? 6 : 7, smartHero ? 11 : 12)
   const extraPosts = posts.slice(smartHero ? 11 : 12)
 

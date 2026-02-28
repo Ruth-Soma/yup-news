@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { timeAgo, readingTime, flagEmoji, placeholderImage } from '@/lib/utils'
+import { timeAgo, readingTime, flagEmoji, placeholderImage, countryInfoFromPost } from '@/lib/utils'
 
 export default function ArticleCard({ post, className = '' }) {
   const commentCount = parseInt(post.comments?.[0]?.count ?? 0)
@@ -16,15 +16,18 @@ export default function ArticleCard({ post, className = '' }) {
           <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g400">
             {post.category?.replace(/-/g, ' ')}
           </span>
-          {post.country && (
-            <>
-              <span className="text-g300 text-[0.55rem]">·</span>
-              <span className="text-[0.6rem] font-mono text-g500 flex items-center gap-1">
-                {flagEmoji(post.country_code)}
-                {post.country}
-              </span>
-            </>
-          )}
+          {(() => {
+            const ci = countryInfoFromPost(post)
+            return ci ? (
+              <>
+                <span className="text-g300 text-[0.55rem]">·</span>
+                <span className="text-[0.6rem] font-mono text-g500 flex items-center gap-1">
+                  {ci.code && flagEmoji(ci.code)}
+                  {ci.name}
+                </span>
+              </>
+            ) : null
+          })()}
         </div>
 
         {/* Title */}

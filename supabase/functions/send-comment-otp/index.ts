@@ -7,6 +7,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ─── HMAC token helpers (shared with verify-comment-otp) ─────────────────────
+
+async function getKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  )
+}
+
+async function generateCommenterToken(email: string, name: string, secret: string): Promise<string> {
+  const payload = { email, name, ts: Date.now() }
+  const msg = JSON.stringify(payload)
+  const key = await getKey(secret)
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg))
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+  return btoa(JSON.stringify({ ...payload, sig: sigB64 }))
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -29,6 +50,30 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+    const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    // ── Subscriber fast-path: skip OTP for verified subscribers ──────────────
+    // Check if this email is already a confirmed subscriber — if so, trust them
+    // and issue a commenter token directly without requiring OTP verification.
+    const { data: subscriber } = await supabase
+      .from('subscribers')
+      .select('email, name')
+      .eq('email', email.trim().toLowerCase())
+      .eq('confirmed', true)
+      .maybeSingle()
+
+    if (subscriber) {
+      // Known subscriber — generate token and return immediately (no OTP email)
+      const displayName = name.trim().substring(0, 80)
+      const commenter_token = await generateCommenterToken(
+        email.trim().toLowerCase(),
+        displayName,
+        secret
+      )
+      return json({ success: true, skip_otp: true, commenter_token }, 200)
+    }
+
+    // ── Standard OTP flow for non-subscribers ────────────────────────────────
 
     // Rate limit: max 3 requests per email in the last 15 minutes
     const { count } = await supabase

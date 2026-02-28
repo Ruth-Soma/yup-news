@@ -82,16 +82,16 @@ function footer(unsubscribeUrl = ''): string {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td>
-            <p style="font-family:Arial,sans-serif;font-size:11px;color:rgba(240,237,230,0.35);margin:0 0 6px;line-height:1.6;">
+            <p style="font-family:Arial,sans-serif;font-size:11px;color:rgba(240,237,230,0.80);margin:0 0 6px;line-height:1.6;">
               © ${new Date().getFullYear()} YUP Media Ltd. AI-assisted journalism. All rights reserved.
             </p>
-            <p style="font-family:Arial,sans-serif;font-size:11px;color:rgba(240,237,230,0.25);margin:0;line-height:1.6;">
+            <p style="font-family:Arial,sans-serif;font-size:11px;color:rgba(240,237,230,0.70);margin:0;line-height:1.6;">
               You're receiving this because you subscribed at yup.ng.
-              ${unsubscribeUrl ? `&nbsp;·&nbsp;<a href="${unsubscribeUrl}" style="color:rgba(240,237,230,0.4);text-decoration:underline;">Unsubscribe</a>` : ''}
+              ${unsubscribeUrl ? `&nbsp;·&nbsp;<a href="${unsubscribeUrl}" style="color:rgba(240,237,230,0.70);text-decoration:underline;">Unsubscribe</a>` : ''}
             </p>
           </td>
           <td align="right" valign="top">
-            <a href="${SITE_URL}" style="font-family:Georgia,serif;font-size:18px;font-weight:bold;color:rgba(240,237,230,0.2);text-decoration:none;letter-spacing:-0.02em;">${BRAND}</a>
+            <a href="${SITE_URL}" style="font-family:Georgia,serif;font-size:18px;font-weight:bold;color:rgba(240,237,230,0.55);text-decoration:none;letter-spacing:-0.02em;">${BRAND}</a>
           </td>
         </tr>
       </table>

@@ -78,6 +78,24 @@ export function flagEmoji(code) {
     .join('')
 }
 
+// Infer country info from a post — returns { code, name } or null.
+// Uses country_code/country fields first, then falls back to the region field
+// so that older posts without explicit country data still show a flag.
+const _REGION_COUNTRY = {
+  'us':            { code: 'US', name: 'United States' },
+  'united-states': { code: 'US', name: 'United States' },
+  'china':         { code: 'CN', name: 'China' },
+  'uk':            { code: 'GB', name: 'United Kingdom' },
+  'europe':        { code: 'EU', name: 'Europe' },
+  'russia':        { code: 'RU', name: 'Russia' },
+}
+
+export function countryInfoFromPost(post) {
+  if (post?.country_code) return { code: post.country_code, name: post.country || '' }
+  const r = (post?.region || '').toLowerCase()
+  return _REGION_COUNTRY[r] || null
+}
+
 export const CATEGORIES = [
   { value: 'breaking-news', label: 'Breaking' },
   { value: 'politics', label: 'Politics' },

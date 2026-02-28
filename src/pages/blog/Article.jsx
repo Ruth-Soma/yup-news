@@ -8,7 +8,7 @@ import ArticleCard from '@/components/blog/ArticleCard'
 import SEO from '@/components/ui/SEO'
 import { BreakingBadge } from '@/components/ui/Badge'
 import { getPostBySlug, getRelatedPosts, getMoreFromCategory, incrementPostViews, getComments, addComment, getLikeCount, toggleLike, hasLiked } from '@/lib/queries'
-import { formatDate, readingTime, placeholderImage, timeAgo, flagEmoji } from '@/lib/utils'
+import { formatDate, readingTime, placeholderImage, timeAgo, flagEmoji, countryInfoFromPost } from '@/lib/utils'
 import { useBookmarks } from '@/hooks/useBookmarks'
 
 // Allowed HTML tags and attributes for article body (whitelist only journalism markup)
@@ -190,6 +190,13 @@ export default function Article() {
       const data = await res.json()
       if (!res.ok || !data.success) {
         setSubmitError(data.error || 'Failed to send verification email. Please try again.')
+      } else if (data.skip_otp) {
+        // Subscriber — save token and post directly without OTP
+        const saved = { name: commentName, email: commentEmail, token: data.commenter_token }
+        localStorage.setItem(COMMENTER_KEY, JSON.stringify(saved))
+        setCommenter(saved)
+        // Post comment immediately using the token
+        await postCommentWithToken(saved, commentText)
       } else {
         setPendingId(data.pending_id)
         setCommentStep('otp')
@@ -198,6 +205,41 @@ export default function Article() {
       setSubmitError('Network error. Please try again.')
     }
     setSubmitting(false)
+  }
+
+  async function postCommentWithToken(commenterData, text) {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-comment-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          commenter_token: commenterData.token,
+          post_id: post.id,
+          name: commenterData.name,
+          content: text,
+        }),
+      })
+      const data = await res.json()
+      if (data.token_expired) {
+        localStorage.removeItem(COMMENTER_KEY)
+        setCommenter(null)
+        setCommentName('')
+        setCommentEmail('')
+        setCommentStep('form')
+        setSubmitError('Your session expired. Please verify your email again.')
+      } else if (!res.ok || !data.success) {
+        setSubmitError(data.error || 'Failed to post comment. Please try again.')
+      } else {
+        setComments(prev => [...prev, data.comment])
+        setCommentStep('done')
+        setCommentText('')
+      }
+    } catch {
+      setSubmitError('Network error. Please try again.')
+    }
   }
 
   async function handleVerifyOTP(e) {
@@ -241,39 +283,7 @@ export default function Article() {
     if (!commentText.trim() || !commenter) return
     setSubmitting(true)
     setSubmitError('')
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-comment-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          commenter_token: commenter.token,
-          post_id: post.id,
-          name: commenter.name,
-          content: commentText,
-        }),
-      })
-      const data = await res.json()
-      if (data.token_expired) {
-        // Token expired — clear and fall back to full OTP flow
-        localStorage.removeItem(COMMENTER_KEY)
-        setCommenter(null)
-        setCommentName('')
-        setCommentEmail('')
-        setCommentStep('form')
-        setSubmitError('Your session expired. Please verify your email again.')
-      } else if (!res.ok || !data.success) {
-        setSubmitError(data.error || 'Failed to post comment. Please try again.')
-      } else {
-        setComments(prev => [...prev, data.comment])
-        setCommentStep('done')
-        setCommentText('')
-      }
-    } catch {
-      setSubmitError('Network error. Please try again.')
-    }
+    await postCommentWithToken(commenter, commentText)
     setSubmitting(false)
   }
 
@@ -376,15 +386,18 @@ export default function Article() {
               <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
               <span>·</span>
               <span>{readingTime(post.content)}</span>
-              {post.country_code && (
-                <>
-                  <span>·</span>
-                  <span className="flex items-center gap-1">
-                    <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{flagEmoji(post.country_code)}</span>
-                    <span>{post.country}</span>
-                  </span>
-                </>
-              )}
+              {(() => {
+                const ci = countryInfoFromPost(post)
+                return ci ? (
+                  <>
+                    <span>·</span>
+                    <span className="flex items-center gap-1">
+                      {ci.code && <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{flagEmoji(ci.code)}</span>}
+                      {ci.name && <span>{ci.name}</span>}
+                    </span>
+                  </>
+                ) : null
+              })()}
             </div>
 
             {/* Cover image */}
@@ -505,8 +518,8 @@ export default function Article() {
               <div className="border border-g200 p-6">
                 {commentStep === 'done' ? (
                   <div className="py-4 text-center">
-                    <p className="text-[0.88rem] font-sans text-ink font-medium mb-1">Comment submitted.</p>
-                    <p className="text-[0.78rem] font-sans text-g500">Your comment is pending review and will appear once approved.</p>
+                    <p className="text-[0.88rem] font-sans text-ink font-medium mb-1">Comment posted!</p>
+                    <p className="text-[0.78rem] font-sans text-g500">Thanks for sharing your thoughts.</p>
                     <button
                       onClick={() => { setCommentStep('form'); setSubmitError('') }}
                       className="mt-4 text-[0.72rem] font-mono uppercase tracking-[0.1em] text-g500 hover:text-ink transition-colors"

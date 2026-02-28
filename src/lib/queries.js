@@ -203,7 +203,7 @@ export async function getMarketPosts({ page = 1, pageSize = 20 } = {}) {
     .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, tags, source_name, views, published_at, comments(count)', { count: 'exact' })
     .eq('status', 'published')
     .lte('published_at', new Date().toISOString())
-    .in('category', ['business', 'finance', 'breaking-news'])
+    .in('category', ['business', 'finance', 'breaking-news', 'world', 'politics', 'technology'])
     .order('published_at', { ascending: false })
     .range(from, to)
   return { data: data || [], error, count, totalPages: Math.ceil((count || 0) / pageSize) }
