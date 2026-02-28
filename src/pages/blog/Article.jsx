@@ -8,7 +8,7 @@ import ArticleCard from '@/components/blog/ArticleCard'
 import SEO from '@/components/ui/SEO'
 import { BreakingBadge } from '@/components/ui/Badge'
 import { getPostBySlug, getRelatedPosts, getMoreFromCategory, incrementPostViews, getComments, addComment, getLikeCount, toggleLike, hasLiked } from '@/lib/queries'
-import { formatDate, readingTime, placeholderImage, timeAgo } from '@/lib/utils'
+import { formatDate, readingTime, placeholderImage, timeAgo, flagEmoji } from '@/lib/utils'
 import { useBookmarks } from '@/hooks/useBookmarks'
 
 // Allowed HTML tags and attributes for article body (whitelist only journalism markup)
@@ -376,6 +376,15 @@ export default function Article() {
               <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
               <span>·</span>
               <span>{readingTime(post.content)}</span>
+              {post.country_code && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{flagEmoji(post.country_code)}</span>
+                    <span>{post.country}</span>
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Cover image */}
