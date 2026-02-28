@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer'
 import SEO from '@/components/ui/SEO'
 import { usePosts } from '@/hooks/usePosts'
 import { useGeoRegion } from '@/hooks/useGeoRegion'
+import { useFeaturedPosts } from '@/hooks/useFeaturedPosts'
 import { getMostReadPosts } from '@/lib/queries'
 import { timeAgo, readingTime, placeholderImage } from '@/lib/utils'
 
@@ -35,44 +36,94 @@ function SectionRow({ label, linkTo, linkLabel }) {
   )
 }
 
-// ─── Featured Story ────────────────────────────────────────────────────────
-function FeaturedStory({ post }) {
+// ─── Featured Story (rotating carousel) ───────────────────────────────────
+const HERO_LABELS = {
+  breaking:  { text: 'Breaking News',        dot: 'bg-red-500' },
+  'for-you': { text: 'For You',              dot: 'bg-blue-500' },
+  world:     { text: 'Most Popular · World', dot: 'bg-ink' },
+  latest:    { text: 'Featured Story',       dot: 'bg-ink' },
+}
+
+function FeaturedStory({ posts, fallbackPost }) {
+  const allPosts = posts.length > 0 ? posts : (fallbackPost ? [{ ...fallbackPost, _label: 'latest' }] : [])
+  const [active, setActive] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  // Reset when the candidate list first arrives
+  useEffect(() => { setActive(0); setVisible(true) }, [posts.length])
+
+  function goTo(i) {
+    if (i === active || !visible) return
+    setVisible(false)
+    setTimeout(() => { setActive(i); setVisible(true) }, 200)
+  }
+
+  // Auto-rotate every 6 seconds
+  useEffect(() => {
+    if (allPosts.length <= 1) return
+    const timer = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => { setActive(prev => (prev + 1) % allPosts.length); setVisible(true) }, 200)
+    }, 6000)
+    return () => clearInterval(timer)
+  }, [allPosts.length])
+
+  const post = allPosts[active]
   if (!post) return null
+  const label = HERO_LABELS[post._label] ?? HERO_LABELS.latest
+
   return (
-    <Link to={`/post/${post.slug}`} className="group block pt-12 pb-0 border-b border-g200">
-      <div className="max-w-[860px] mb-8">
-        <div className="text-[0.65rem] font-mono uppercase tracking-[0.16em] text-g500 mb-5 flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-ink inline-block" />
-          {post.category === 'breaking-news' ? 'Breaking News' : 'Featured Story'}
-        </div>
-        <h1
-          className="font-serif font-bold text-ink leading-[1.06] tracking-[-0.025em] mb-5 group-hover:opacity-80 transition-opacity"
-          style={{ fontSize: 'clamp(2.4rem, 5vw, 4.5rem)' }}
-        >
-          {post.title}
-        </h1>
-        {post.excerpt && (
-          <p className="text-[1rem] md:text-[1.1rem] text-g500 font-light leading-[1.65] mb-6 max-w-[600px]">
-            {post.excerpt}
-          </p>
-        )}
-        <div className="flex items-center gap-3 text-[0.72rem] font-sans text-g500">
-          {post.source_name && <span>By {post.source_name}</span>}
-          {post.source_name && <span>·</span>}
-          <span>{readingTime(post.content || post.excerpt || '')}</span>
-          <span>·</span>
-          <time>{timeAgo(post.published_at)}</time>
-        </div>
+    <div className="pt-12 pb-0 border-b border-g200">
+      <div className={`transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+        <Link to={`/post/${post.slug}`} className="group block">
+          <div className="max-w-[860px] mb-8">
+            <div className="flex items-center justify-between mb-5">
+              <div className="text-[0.65rem] font-mono uppercase tracking-[0.16em] text-g500 flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${label.dot}`} />
+                {label.text}
+              </div>
+              {allPosts.length > 1 && (
+                <div className="flex items-center gap-2">
+                  {allPosts.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={e => { e.preventDefault(); goTo(i) }}
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${i === active ? 'bg-ink' : 'bg-g300 hover:bg-g500'}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <h1
+              className="font-serif font-bold text-ink leading-[1.06] tracking-[-0.025em] mb-5 group-hover:opacity-80 transition-opacity"
+              style={{ fontSize: 'clamp(2.4rem, 5vw, 4.5rem)' }}
+            >
+              {post.title}
+            </h1>
+            {post.excerpt && (
+              <p className="text-[1rem] md:text-[1.1rem] text-g500 font-light leading-[1.65] mb-6 max-w-[600px]">
+                {post.excerpt}
+              </p>
+            )}
+            <div className="flex items-center gap-3 text-[0.72rem] font-sans text-g500">
+              {post.source_name && <span>By {post.source_name}</span>}
+              {post.source_name && <span>·</span>}
+              <span>{readingTime(post.content || post.excerpt || '')}</span>
+              <span>·</span>
+              <time>{timeAgo(post.published_at)}</time>
+            </div>
+          </div>
+          <div className="w-full aspect-[21/9] overflow-hidden">
+            <img
+              src={post.cover_image || placeholderImage(post.category)}
+              alt={post.title}
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
+              onError={e => { e.currentTarget.src = placeholderImage(post.category) }}
+            />
+          </div>
+        </Link>
       </div>
-      <div className="w-full aspect-[21/9] overflow-hidden">
-        <img
-          src={post.cover_image || placeholderImage(post.category)}
-          alt={post.title}
-          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
-          onError={e => { e.currentTarget.src = placeholderImage(post.category) }}
-        />
-      </div>
-    </Link>
+    </div>
   )
 }
 
@@ -312,6 +363,7 @@ export default function Home() {
   }
 
   const { posts, loading, loadingMore, totalPages } = usePosts({ page, region, append: true })
+  const { candidates } = useFeaturedPosts()
   const sentinelRef = useRef(null)
 
   // Infinite scroll — trigger next page when sentinel comes into view
@@ -329,11 +381,13 @@ export default function Home() {
     return () => observer.disconnect()
   }, [loadingMore, page, totalPages])
 
-  // With append mode, posts accumulates — derive layout slices from the full array
-  const featured = posts[0] || null
-  const latestPosts = posts.slice(1, 7)
-  const longReads = posts.slice(7, 12)
-  const extraPosts = posts.slice(12) // shown below Long Reads after Load More
+  // When smart candidates are ready the hero is independent of the main list,
+  // so show posts starting from index 0 in the grid. Until then fall back to
+  // posts[0] as the hero and start the grid from index 1.
+  const smartHero = candidates.length > 0
+  const latestPosts = posts.slice(smartHero ? 0 : 1, smartHero ? 6 : 7)
+  const longReads = posts.slice(smartHero ? 6 : 7, smartHero ? 11 : 12)
+  const extraPosts = posts.slice(smartHero ? 11 : 12)
 
   return (
     <>
@@ -342,13 +396,13 @@ export default function Home() {
 
       <main className="px-6 md:px-12 max-w-[1200px] mx-auto">
 
-        {/* Featured story */}
-        {!loading && featured && (
-          <FeaturedStory post={featured} />
+        {/* Featured story — rotating smart hero */}
+        {(candidates.length > 0 || posts[0]) && (
+          <FeaturedStory posts={candidates} fallbackPost={posts[0] || null} />
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
+        {/* Loading skeleton — only while nothing is ready yet */}
+        {loading && candidates.length === 0 && (
           <div className="py-20 space-y-4 animate-pulse">
             <div className="h-3 bg-g100 w-32" />
             <div className="h-14 bg-g100 w-3/4" />

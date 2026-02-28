@@ -79,6 +79,34 @@ export async function getMostReadPosts() {
   return { data, error }
 }
 
+export async function getFeaturedCandidates(topCategory) {
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  const SELECT = 'id, title, slug, excerpt, cover_image, category, region, source_name, views, published_at'
+
+  const [breakingRes, relatedRes, worldRes] = await Promise.all([
+    // 1. Breaking news in the last 6 hours
+    supabase.from('posts').select(SELECT)
+      .eq('status', 'published').eq('category', 'breaking-news')
+      .gte('published_at', sixHoursAgo).order('published_at', { ascending: false }).limit(2),
+    // 2. Most popular from user's top interest category
+    topCategory
+      ? supabase.from('posts').select(SELECT)
+          .eq('status', 'published').eq('category', topCategory)
+          .order('views', { ascending: false }).order('published_at', { ascending: false }).limit(1)
+      : Promise.resolve({ data: [] }),
+    // 3. Most popular world post
+    supabase.from('posts').select(SELECT)
+      .eq('status', 'published').eq('region', 'global')
+      .order('views', { ascending: false }).limit(1),
+  ])
+
+  return {
+    breaking: breakingRes.data || [],
+    related: relatedRes.data || [],
+    world: worldRes.data || [],
+  }
+}
+
 export async function getBreakingNewsTicker() {
   const { data, error } = await supabase
     .from('posts')
