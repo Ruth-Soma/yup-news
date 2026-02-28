@@ -1,11 +1,11 @@
-name: Build Check
+name: Deploy to Render
 
 on:
   push:
     branches: [main]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +25,11 @@ jobs:
           VITE_SITE_URL: ${{ secrets.VITE_SITE_URL }}
           VITE_SITE_NAME: ${{ secrets.VITE_SITE_NAME }}
           VITE_GA_ID: ${{ secrets.VITE_GA_ID }}
+
+      - name: Trigger Render deploy
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            curl -s "$RENDER_DEPLOY_HOOK_URL"
+          fi
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
