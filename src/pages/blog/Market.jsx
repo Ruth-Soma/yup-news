@@ -26,17 +26,34 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const ASSETS = [
   { key: 'GOLD',   label: 'Gold',        tab: 'futures', icon: '🥇',
-    keywords: ['gold','bullion','xau','spot gold','gold price','gold futures','precious metal',
-               'gold reserve','gold demand','central bank gold','gold rally','gold slump',
-               'yellow metal','gold output','gold mine','gold production'] },
+    keywords: [
+      // Direct gold references
+      'gold','bullion','xau','spot gold','gold price','gold futures','precious metal',
+      'gold reserve','gold demand','central bank gold','gold rally','gold slump',
+      'yellow metal','gold output','gold mine','gold production',
+      // Macro safe-haven triggers — war/conflict drives gold regardless of explicit gold mention
+      'geopolitical','geopolitics','geopolitical risk','geopolitical tension',
+      'war','warfare','armed conflict','military conflict','military strike',
+      'invasion','invaded','military offensive','airstrike','missile strike',
+      'nuclear threat','nuclear weapon','escalation','military escalation',
+      'safe haven','flight to safety','risk-off','risk off',
+      'inflation hedge','stagflation','hyperinflation',
+      'dollar collapse','dollar crash','dollar devaluation','currency crisis',
+      'central bank reserves','reserve accumulation','de-dollarisation','de-dollarization',
+    ] },
   { key: 'SILVER', label: 'Silver',      tab: 'futures', icon: '🥈',
     keywords: ['silver','xag','spot silver','silver price','silver futures','silver demand',
-               'industrial silver','silver mine','silver output'] },
+               'industrial silver','silver mine','silver output',
+               'precious metal','solar panel demand','ev battery','energy transition'] },
   { key: 'OIL',    label: 'Crude Oil',   tab: 'futures', icon: '🛢️',
     keywords: ['crude oil','brent','wti','petroleum','opec','barrel','oil price','energy price',
                'oil market','oil supply','oil output','oil demand','oil inventory',
                'oil production cut','opec+','oil embargo','refinery','oil sanctions',
-               'oil glut','oil shortage','energy crisis','oil export'] },
+               'oil glut','oil shortage','energy crisis','oil export',
+               // Conflict in oil-producing regions drives oil price
+               'strait of hormuz','persian gulf','middle east conflict','iran sanctions',
+               'russia oil','russia energy','pipeline attack','oil infrastructure',
+               'venezuela sanctions','libyan oil','iraqi oil','saudi aramco'] },
   { key: 'NATGAS', label: 'Natural Gas', tab: 'futures', icon: '🔥',
     keywords: ['natural gas','nat gas','lng','gas price','gas supply','gas market',
                'gas pipeline','gas shortage','gas storage','gas demand',
@@ -79,7 +96,9 @@ const ASSETS = [
     keywords: ['swiss franc','chf','snb','swiss national bank','jordan snb',
                'switzerland inflation','safe haven currency','chf strengthens',
                'switzerland gdp','snb rate','swiss economy','swiss interest rate',
-               'geneva','zurich market','swiss bank'] },
+               'geneva','zurich market','swiss bank',
+               // CHF benefits from same geopolitical risk-off flows as gold
+               'geopolitical risk','flight to safety','risk-off','global uncertainty'] },
   { key: 'CNY',   label: 'USD/CNY',     tab: 'forex',   icon: '🇨🇳',
     keywords: ['yuan','renminbi','cny','pboc','peoples bank of china',
                'china currency','yuan devaluation','yuan weakens','yuan strengthens',
@@ -146,14 +165,47 @@ const ASSET_CONTEXT = {
            bearish_extra: [/\b(rate cut|dovish|fed cut|weak jobs|jobs miss)\b/i] },
   JPY:   { bullish_extra: [/\b(boj hike|boj raises|yield curve control end|japan tightening)\b/i],
            bearish_extra: [/\b(boj hold|yield curve control|boj easing|boj stimulus)\b/i] },
-  CHF:   { bullish_extra: [/\b(safe haven|geopolitical risk|flight to safety|swiss franc)\b/i],
-           bearish_extra: [/\b(snb cut|snb negative rate|risk.on)\b/i] },
-  GOLD:  { bullish_extra: [/\b(war|geopolitical|safe haven|inflation hedge|dollar weakens|fed pivot)\b/i],
-           bearish_extra: [/\b(rate hike|real yield rise|dollar rally|risk appetite)\b/i] },
+  CHF:   {
+    // CHF is a safe-haven — war and geopolitical risk are strongly bullish
+    bullish_extra: [
+      /\b(safe haven|geopolitical risk|flight to safety|swiss franc|war|conflict|invasion|crisis)\b/i,
+    ],
+    bearish_extra: [/\b(snb cut|snb negative rate|risk.on|risk appetite|market rally)\b/i],
+  },
+  GOLD:  {
+    // Gold is the primary safe-haven. War, geopolitical crisis, inflation, currency debasement all bullish.
+    bullish_extra: [
+      /\b(war|warfare|invasion|invaded|military|airstrike|missile|nuclear|armed conflict)\b/i,
+      /\b(geopolitical|geopolitics|escalation|tension|conflict|crisis)\b/i,
+      /\b(safe haven|flight to safety|risk.off|inflation hedge|stagflation)\b/i,
+      /\b(dollar weakens|dollar falls|dollar crash|currency crisis|de.dollariz)\b/i,
+      /\b(fed pivot|rate cut|quantitative easing|money printing|debt crisis|deficit)\b/i,
+      /\b(central bank gold|reserve accumulation|etf inflow|physical demand)\b/i,
+    ],
+    bearish_extra: [
+      /\b(rate hike|real yield rise|dollar rally|dollar strengthens|risk appetite|risk.on)\b/i,
+    ],
+  },
+  OIL:   {
+    // Oil surges on Middle East conflict, pipeline disruptions, OPEC+ cuts
+    bullish_extra: [
+      /\b(war|conflict|invasion|military|airstrike|strait of hormuz|persian gulf|iran)\b/i,
+      /\b(opec.cut|production cut|supply disruption|pipeline attack|sanctions)\b/i,
+    ],
+    bearish_extra: [
+      /\b(supply glut|opec.increase|shale boom|demand slump|recession|china slowdown)\b/i,
+    ],
+  },
   BTC:   { bullish_extra: [/\b(etf inflow|halving|institutional|blackrock|fidelity bitcoin|spot etf)\b/i],
            bearish_extra: [/\b(ban|crackdown|sec action|regulation tighten|exchange collapse)\b/i] },
-  SP500: { bullish_extra: [/\b(rate cut|fed pivot|earnings beat|gdp beat|soft landing)\b/i],
-           bearish_extra: [/\b(rate hike|recession fear|earnings miss|gdp miss|yield inversion)\b/i] },
+  SP500: {
+    bullish_extra: [/\b(rate cut|fed pivot|earnings beat|gdp beat|soft landing|ceasefire|peace deal)\b/i],
+    // War and geopolitical risk are bearish for equities
+    bearish_extra: [
+      /\b(rate hike|recession fear|earnings miss|gdp miss|yield inversion)\b/i,
+      /\b(war|invasion|military|airstrike|geopolitical|escalation|conflict)\b/i,
+    ],
+  },
 }
 
 function scoreSentiment(text) {
@@ -172,8 +224,10 @@ function detectAssets(title, excerpt) {
     let { bull, bear } = scoreSentiment(full)
     const ctx = ASSET_CONTEXT[asset.key]
     if (ctx) {
-      for (const re of (ctx.bullish_extra || [])) if (re.test(full)) bull += 2
-      for (const re of (ctx.bearish_extra || [])) if (re.test(full)) bear += 2
+      // Asset-specific context signals carry higher weight (3) than generic sentiment (1-3)
+      // This lets war -> gold bullish override the generic "war = bearish" base score
+      for (const re of (ctx.bullish_extra || [])) if (re.test(full)) bull += 3
+      for (const re of (ctx.bearish_extra || [])) if (re.test(full)) bear += 3
     }
     const dir = bull > bear ? 'bullish' : bear > bull ? 'bearish' : 'neutral'
     found.push({ ...asset, dir, bull, bear, confidence: Math.abs(bull - bear) })
@@ -184,10 +238,10 @@ function detectAssets(title, excerpt) {
 // ─── Market sessions ───────────────────────────────────────────────────────────
 
 const SESSIONS = [
-  { name: 'Sydney',   openUTC: 22, closeUTC: 7,  flag: '🇦🇺', color: 'violet', note: 'AUD/NZD active' },
-  { name: 'Tokyo',    openUTC: 0,  closeUTC: 9,  flag: '🇯🇵', color: 'red',    note: 'JPY/AUD active' },
-  { name: 'London',   openUTC: 7,  closeUTC: 16, flag: '🇬🇧', color: 'blue',   note: 'EUR/GBP/CHF active' },
-  { name: 'New York', openUTC: 13, closeUTC: 22, flag: '🇺🇸', color: 'green',  note: 'USD/CAD active' },
+  { name: 'Sydney',   openUTC: 22, closeUTC: 7,  flag: '🇦🇺', note: 'AUD/NZD active' },
+  { name: 'Tokyo',    openUTC: 0,  closeUTC: 9,  flag: '🇯🇵', note: 'JPY/AUD active' },
+  { name: 'London',   openUTC: 7,  closeUTC: 16, flag: '🇬🇧', note: 'EUR/GBP/CHF active' },
+  { name: 'New York', openUTC: 13, closeUTC: 22, flag: '🇺🇸', note: 'USD/CAD active' },
 ]
 
 function isSessionActive(s, utcH) {
@@ -210,11 +264,11 @@ function SessionBar() {
 
   const h = now.getUTCHours()
   const m = now.getUTCMinutes()
-  const londonNY = h >= 13 && h < 16   // peak liquidity overlap
+  const londonNY = h >= 13 && h < 16
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 bg-[#0d1117] border border-[#21262d] rounded-sm mb-3 text-[0.6rem] font-mono">
-      <span className="text-[#8b949e] uppercase tracking-[0.12em] shrink-0">Sessions</span>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 bg-g100 border border-g200 rounded-sm mb-3">
+      <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g400 shrink-0">Sessions</span>
       {SESSIONS.map(s => {
         const active = isSessionActive(s, h)
         const next   = active ? s.closeUTC : s.openUTC
@@ -224,21 +278,21 @@ function SessionBar() {
         const eta    = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`
         return (
           <div key={s.name} title={s.note}
-            className={`flex items-center gap-1.5 ${active ? 'text-emerald-400' : 'text-[#484f58]'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]' : 'bg-[#30363d]'}`} />
+            className={`flex items-center gap-1.5 text-[0.6rem] font-mono ${active ? 'text-ink' : 'text-g400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-500' : 'bg-g300'}`} />
             <span>{s.flag} {s.name}</span>
-            <span className={`${active ? 'text-emerald-300 font-semibold' : 'text-[#484f58]'}`}>
-              {active ? `OPEN · closes ${eta}` : `CLOSED · opens ${eta}`}
+            <span className={`${active ? 'text-emerald-600 font-semibold' : 'text-g400'}`}>
+              {active ? `OPEN · closes ${eta}` : `closes ${eta}`}
             </span>
           </div>
         )
       })}
       {londonNY && (
-        <span className="ml-auto text-amber-400 font-bold tracking-[0.08em] animate-pulse">
-          ⚡ PEAK LIQUIDITY — London/NY Overlap
+        <span className="ml-auto text-[0.6rem] font-mono text-amber-600 font-bold tracking-[0.06em]">
+          ⚡ Peak Liquidity — London/NY Overlap
         </span>
       )}
-      <span className="text-[#484f58] shrink-0 tabular-nums">
+      <span className="text-[0.58rem] font-mono text-g400 shrink-0 tabular-nums ml-auto">
         {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')} UTC
       </span>
     </div>
@@ -255,11 +309,10 @@ function MarketPulse({ prices }) {
   const btc = get('BTC')
   const oil = get('OIL')
 
-  const up   = prices.filter(p => p.changePercent != null && p.changePercent > 0).length
-  const down = prices.filter(p => p.changePercent != null && p.changePercent < 0).length
+  const up    = prices.filter(p => p.changePercent != null && p.changePercent > 0).length
+  const down  = prices.filter(p => p.changePercent != null && p.changePercent < 0).length
   const total = up + down
 
-  // Classic risk-on: equities up + gold down; risk-off: gold up + equities down
   let mood = 'mixed'
   if (sp?.changePercent > 0.4 && gld?.changePercent < -0.2)   mood = 'risk-on'
   else if (gld?.changePercent > 0.4 && sp?.changePercent < -0.2) mood = 'risk-off'
@@ -267,29 +320,28 @@ function MarketPulse({ prices }) {
   else if (gld?.changePercent > 0.3 && btc?.changePercent < -1)  mood = 'risk-off'
 
   const cfg = {
-    'risk-on':  { bg: 'bg-emerald-950/60 border-emerald-800', badge: 'bg-emerald-500 text-white', icon: '📈', label: 'RISK-ON'  },
-    'risk-off': { bg: 'bg-red-950/60 border-red-800',          badge: 'bg-red-500 text-white',     icon: '🛡️', label: 'RISK-OFF' },
-    mixed:      { bg: 'bg-amber-950/40 border-amber-800',      badge: 'bg-amber-500 text-white',   icon: '⚖️', label: 'MIXED'   },
+    'risk-on':  { bg: 'bg-emerald-50 border-emerald-200', badge: 'bg-emerald-600 text-white', text: 'text-emerald-700', icon: '▲', label: 'RISK-ON'  },
+    'risk-off': { bg: 'bg-red-50 border-red-200',          badge: 'bg-red-600 text-white',     text: 'text-red-700',    icon: '▼', label: 'RISK-OFF' },
+    mixed:      { bg: 'bg-amber-50 border-amber-200',      badge: 'bg-amber-500 text-white',   text: 'text-amber-700', icon: '◆', label: 'MIXED'   },
   }
   const c = cfg[mood]
 
   const fmt = (p, key) => {
     if (!p || p.changePercent == null) return null
     const sign = p.changePercent >= 0 ? '+' : ''
-    return `${key} ${sign}${p.changePercent.toFixed(2)}%`
+    return { label: key, value: `${sign}${p.changePercent.toFixed(2)}%`, up: p.changePercent >= 0 }
   }
-
-  const signals = [fmt(sp, 'S&P'), fmt(gld, 'Gold'), fmt(btc, 'BTC'), fmt(oil, 'Oil')].filter(Boolean)
+  const signals = [fmt(sp,'S&P 500'), fmt(gld,'Gold'), fmt(btc,'BTC'), fmt(oil,'Oil')].filter(Boolean)
 
   return (
-    <div className={`flex flex-wrap items-center gap-3 px-3 py-2 border rounded-sm mb-3 text-[0.6rem] font-mono ${c.bg}`}>
-      <span className={`text-[0.55rem] font-bold px-2 py-0.5 rounded-sm tracking-[0.14em] ${c.badge}`}>
+    <div className={`flex flex-wrap items-center gap-3 px-4 py-2.5 border rounded-sm mb-3 ${c.bg}`}>
+      <span className={`text-[0.55rem] font-mono font-bold px-2 py-0.5 rounded-sm tracking-[0.12em] ${c.badge}`}>
         {c.icon} {c.label}
       </span>
-      <span className="text-[#8b949e]">{up}/{total} assets positive</span>
+      <span className="text-[0.6rem] font-mono text-g500">{up}/{total} assets positive today</span>
       {signals.map((s, i) => (
-        <span key={i} className={s.includes('+') ? 'text-emerald-400' : s.includes('-') ? 'text-red-400' : 'text-[#8b949e]'}>
-          {s}
+        <span key={i} className={`text-[0.6rem] font-mono ${s.up ? 'text-emerald-600' : 'text-red-600'}`}>
+          <span className="text-g400">{s.label} </span>{s.value}
         </span>
       ))}
     </div>
@@ -297,7 +349,6 @@ function MarketPulse({ prices }) {
 }
 
 // ─── Economic calendar ────────────────────────────────────────────────────────
-// High-impact events scheduled for 2025–2026.
 
 const CALENDAR = [
   // FOMC 2025
@@ -436,40 +487,36 @@ function EconomicCalendar() {
     return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const isToday = (str) => str === todayStr
+  const isToday    = (str) => str === todayStr
   const isTomorrow = (str) => {
     const t = new Date(today); t.setDate(t.getDate() + 1)
     return str === t.toISOString().split('T')[0]
   }
 
   return (
-    <div className="mb-4 border border-[#21262d] rounded-sm overflow-hidden">
-      <div className="px-3 py-2 bg-[#0d1117] border-b border-[#21262d] flex items-center justify-between">
-        <span className="text-[0.58rem] font-mono uppercase tracking-[0.14em] text-[#8b949e]">
-          📅 Economic Calendar — Next 14 Days
+    <div className="mb-5 border border-g200 rounded-sm overflow-hidden">
+      <div className="px-4 py-2.5 bg-g100 border-b border-g200 flex items-center justify-between">
+        <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g500">
+          Economic Calendar — Next 14 Days
         </span>
-        <span className="text-[0.52rem] font-mono text-[#484f58]">High-impact events only</span>
+        <span className="text-[0.55rem] font-mono text-g400">High-impact events</span>
       </div>
-      <div className="divide-y divide-[#21262d]">
+      <div className="divide-y divide-g100">
         {upcoming.map((ev, i) => (
-          <div key={i} className={`flex items-center gap-3 px-3 py-2 text-[0.62rem] font-mono
-            ${isToday(ev.d) ? 'bg-amber-950/30' : 'bg-[#0d1117]/40'}`}>
-            {/* Date */}
+          <div key={i} className={`flex items-center gap-3 px-4 py-2.5 text-[0.62rem] font-mono
+            ${isToday(ev.d) ? 'bg-amber-50' : 'bg-paper'}`}>
             <div className="w-[80px] shrink-0">
-              <span className={`${isToday(ev.d) ? 'text-amber-400 font-bold' : isTomorrow(ev.d) ? 'text-sky-400' : 'text-[#8b949e]'}`}>
+              <span className={`font-medium ${isToday(ev.d) ? 'text-amber-600' : isTomorrow(ev.d) ? 'text-sky-600' : 'text-g500'}`}>
                 {isToday(ev.d) ? 'TODAY' : isTomorrow(ev.d) ? 'TOMORROW' : fmtDate(ev.d)}
               </span>
             </div>
-            {/* Currency flags */}
-            <div className="flex gap-0.5 shrink-0 w-[36px]">
+            <div className="flex gap-0.5 shrink-0 w-[28px]">
               {ev.currencies.map(c => (
                 <span key={c} title={c}>{currencyFlag[c] || c}</span>
               ))}
             </div>
-            {/* Event name */}
-            <span className="flex-1 text-[#e6edf3] font-medium">{ev.label}</span>
-            {/* Impact badge */}
-            <span className="shrink-0 text-[0.5rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-red-900/60 text-red-400 border border-red-800/50">
+            <span className="flex-1 text-ink font-medium">{ev.label}</span>
+            <span className="shrink-0 text-[0.5rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-red-50 text-red-600 border border-red-200">
               HIGH
             </span>
           </div>
@@ -482,7 +529,7 @@ function EconomicCalendar() {
 // ─── Price formatting ──────────────────────────────────────────────────────────
 
 function fmtPrice(price, key, decimals) {
-  if (price == null) return '--'
+  if (price == null) return '—'
   if (key === 'BTC')  return `$${Math.round(price).toLocaleString('en-US')}`
   if (key === 'ETH')  return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   if (key === 'SP500') return price.toLocaleString('en-US', { maximumFractionDigits: 0 })
@@ -513,82 +560,81 @@ function WatchlistCard({ asset, priceData }) {
   const pctUp   = pct != null && pct > 0
   const pctDown = pct != null && pct < 0
 
-  // Intraday range bar position (0–100%)
   const rangePct = (high != null && low != null && price != null && high !== low)
     ? Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100))
     : null
 
   const sentimentBadge = {
-    bullish:   { cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-700', label: '▲ BULL' },
-    bearish:   { cls: 'bg-red-500/20 text-red-400 border-red-700',             label: '▼ BEAR' },
-    neutral:   { cls: 'bg-amber-500/20 text-amber-400 border-amber-700',       label: '— NEU'  },
-    'no-data': { cls: 'bg-[#21262d] text-[#484f58] border-[#30363d]',          label: '· N/A'  },
+    bullish:   { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: '▲ Bull' },
+    bearish:   { cls: 'bg-red-50 text-red-700 border-red-200',             label: '▼ Bear' },
+    neutral:   { cls: 'bg-amber-50 text-amber-700 border-amber-200',       label: '— Neu'  },
+    'no-data': { cls: 'bg-g100 text-g400 border-g200',                     label: '· N/A'  },
   }
   const badge = sentimentBadge[net]
 
   return (
-    <div className={`flex-shrink-0 w-[138px] border rounded-sm p-2.5 font-mono
-      bg-[#0d1117] transition-colors
-      ${pctUp ? 'border-emerald-800/70' : pctDown ? 'border-red-800/70' : 'border-[#21262d]'}`}>
+    <div className={`flex-shrink-0 w-[148px] border rounded-sm p-3 font-mono bg-paper shadow-sm transition-shadow hover:shadow-md
+      ${pctUp ? 'border-l-2 border-l-emerald-400 border-t-g200 border-r-g200 border-b-g200'
+      : pctDown ? 'border-l-2 border-l-red-400 border-t-g200 border-r-g200 border-b-g200'
+      : 'border-g200'}`}>
 
-      {/* Top: icon + sentiment */}
-      <div className="flex items-center justify-between mb-1.5">
+      {/* Top: icon + sentiment badge */}
+      <div className="flex items-center justify-between mb-2">
         <span className="text-[1rem] leading-none">{icon}</span>
-        <span className={`text-[0.46rem] font-bold px-1 py-0.5 border rounded-sm leading-tight tracking-[0.1em] ${badge.cls}`}>
+        <span className={`text-[0.48rem] font-bold px-1.5 py-0.5 border rounded-sm leading-tight tracking-[0.08em] ${badge.cls}`}>
           {badge.label}
         </span>
       </div>
 
       {/* Label */}
-      <div className="text-[0.72rem] font-bold text-[#e6edf3] leading-none mb-1">{label}</div>
+      <div className="text-[0.72rem] font-bold text-ink leading-none mb-1.5">{label}</div>
 
       {/* Price */}
-      <div className={`text-[0.88rem] font-bold leading-tight tabular-nums
-        ${pctUp ? 'text-emerald-400' : pctDown ? 'text-red-400' : 'text-[#e6edf3]'}`}>
+      <div className={`text-[0.92rem] font-bold leading-tight tabular-nums
+        ${pctUp ? 'text-emerald-600' : pctDown ? 'text-red-600' : 'text-ink'}`}>
         {fmtPrice(price, key, dec)}
       </div>
 
       {/* % change */}
       {pct != null ? (
-        <div className={`text-[0.58rem] font-medium leading-tight tabular-nums mt-0.5
-          ${pctUp ? 'text-emerald-500' : pctDown ? 'text-red-500' : 'text-[#8b949e]'}`}>
+        <div className={`text-[0.6rem] font-medium leading-tight tabular-nums mt-0.5
+          ${pctUp ? 'text-emerald-600' : pctDown ? 'text-red-600' : 'text-g500'}`}>
           {fmtPct(pct)}
-          <span className="text-[#484f58] ml-1">{priceData?.source === 'stooq' ? 'vs open' : 'vs prev'}</span>
+          <span className="text-g400 font-normal ml-1">{priceData?.source === 'stooq' ? 'vs open' : 'vs prev'}</span>
         </div>
       ) : (
-        <div className="text-[0.55rem] text-[#484f58] mt-0.5">price unavailable</div>
+        <div className="text-[0.55rem] text-g400 mt-0.5">unavailable</div>
       )}
 
       {/* Intraday high/low range bar */}
       {rangePct !== null && (
-        <div className="mt-2">
-          <div className="flex justify-between text-[0.44rem] text-[#484f58] mb-0.5 tabular-nums">
+        <div className="mt-2.5">
+          <div className="flex justify-between text-[0.45rem] text-g400 mb-1 tabular-nums">
             <span>{fmtPrice(low, key, dec)}</span>
             <span>{fmtPrice(high, key, dec)}</span>
           </div>
-          <div className="h-1 bg-[#21262d] rounded-full overflow-hidden relative">
+          <div className="h-1.5 bg-g100 rounded-full overflow-hidden relative">
             <div
               className={`h-full rounded-full absolute left-0 top-0
-                ${pctUp ? 'bg-emerald-500' : pctDown ? 'bg-red-500' : 'bg-[#8b949e]'}`}
+                ${pctUp ? 'bg-emerald-400' : pctDown ? 'bg-red-400' : 'bg-g300'}`}
               style={{ width: `${rangePct}%` }}
             />
-            {/* Price marker */}
             <div
-              className="w-0.5 h-full bg-white absolute top-0 opacity-80"
+              className="w-0.5 h-full bg-ink absolute top-0 opacity-40"
               style={{ left: `${rangePct}%`, transform: 'translateX(-50%)' }}
             />
           </div>
-          <div className="text-[0.42rem] text-[#484f58] text-center mt-0.5">Day range</div>
+          <div className="text-[0.44rem] text-g400 text-center mt-0.5">Day range</div>
         </div>
       )}
 
       {/* News signal tally */}
       {total > 0 && (
-        <div className="mt-1.5 pt-1 border-t border-[#21262d] text-[0.5rem] flex gap-1">
-          <span className="text-emerald-500">{bullish}↑</span>
-          <span className="text-red-500">{bearish}↓</span>
-          <span className="text-[#484f58]">{neutral}—</span>
-          <span className="text-[#484f58] ml-auto">news</span>
+        <div className="mt-2 pt-1.5 border-t border-g100 text-[0.5rem] flex gap-1.5">
+          <span className="text-emerald-600">{bullish}↑</span>
+          <span className="text-red-600">{bearish}↓</span>
+          <span className="text-g400">{neutral}—</span>
+          <span className="text-g400 ml-auto">news</span>
         </div>
       )}
     </div>
@@ -610,22 +656,22 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
   for (const p of (prices || [])) priceMap[p.key] = p
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-        <span className="text-[0.55rem] font-mono uppercase tracking-[0.14em] text-[#8b949e]">
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-2.5 flex-wrap gap-1">
+        <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g500">
           Live Prices &amp; News Sentiment
         </span>
-        <div className="flex items-center gap-3 text-[0.5rem] font-mono text-[#484f58]">
+        <div className="flex items-center gap-3 text-[0.55rem] font-mono text-g400">
           {pricesUpdated && (
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
               Prices {timeAgo(pricesUpdated)}
             </span>
           )}
           {lastUpdated && <span>News {timeAgo(lastUpdated)}</span>}
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+      <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
         {ASSETS.map(a => (
           <WatchlistCard key={a.key} asset={tally[a.key]} priceData={priceMap[a.key]} />
         ))}
@@ -638,9 +684,9 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
 
 function AssetBadge({ symbol, dir, confidence }) {
   const c = {
-    bullish: 'bg-emerald-950/60 text-emerald-400 border-emerald-800',
-    bearish: 'bg-red-950/60 text-red-400 border-red-800',
-    neutral: 'bg-[#161b22] text-[#8b949e] border-[#30363d]',
+    bullish: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    bearish: 'bg-red-50 text-red-700 border-red-200',
+    neutral: 'bg-g100 text-g500 border-g200',
   }
   const arrow = { bullish: '▲', bearish: '▼', neutral: '—' }
   const dots  = confidence >= 4 ? '●●' : confidence >= 2 ? '●○' : '○○'
@@ -664,15 +710,15 @@ function MarketArticleRow({ post }) {
   const isFresh    = minsAgo <= 30
 
   return (
-    <article className="group border-b border-[#21262d] py-3.5 hover:bg-[#161b22]/60 transition-colors duration-150">
-      <div className="flex gap-3">
+    <article className="group border-b border-g200 py-4 hover:bg-g100 transition-colors duration-150 -mx-4 px-4 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 lg:-mx-12 lg:px-12">
+      <div className="flex gap-3.5">
         {/* Thumbnail */}
         <Link to={`/post/${post.slug}`} className="shrink-0">
-          <div className="w-[82px] h-[54px] sm:w-[112px] sm:h-[74px] bg-[#161b22] overflow-hidden rounded-sm">
+          <div className="w-[84px] h-[56px] sm:w-[116px] sm:h-[77px] bg-g100 overflow-hidden rounded-sm">
             <img
               src={post.cover_image || placeholderImage(post.category)}
               alt={post.title}
-              className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
               onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderImage(post.category) }}
               loading="lazy"
             />
@@ -684,13 +730,13 @@ function MarketArticleRow({ post }) {
           {/* Badges row */}
           <div className="flex flex-wrap gap-1 mb-1.5 items-center">
             {isFresh && (
-              <span className="text-[0.46rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-400 border border-amber-700/60 uppercase tracking-[0.1em]">
-                {minsAgo < 5 ? '🔴 JUST NOW' : `${minsAgo}m ago`}
+              <span className="text-[0.48rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-[0.08em]">
+                {minsAgo < 5 ? '● Just now' : `${minsAgo}m ago`}
               </span>
             )}
             {isBreaking && (
-              <span className="text-[0.46rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-red-500/20 text-red-400 border border-red-700/60 uppercase tracking-[0.1em]">
-                BREAKING
+              <span className="text-[0.48rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-red-50 text-red-700 border border-red-200 uppercase tracking-[0.08em]">
+                Breaking
               </span>
             )}
             {assets.slice(0, 4).map(a => (
@@ -699,19 +745,19 @@ function MarketArticleRow({ post }) {
           </div>
 
           <Link to={`/post/${post.slug}`}>
-            <h3 className="font-serif font-bold text-[#e6edf3] text-[0.88rem] sm:text-[0.97rem] leading-[1.28] line-clamp-2 group-hover:text-[#c9d1d9] transition-colors">
+            <h3 className="font-serif font-bold text-ink text-[0.9rem] sm:text-[0.98rem] leading-[1.3] line-clamp-2 group-hover:text-g600 transition-colors">
               {post.title}
             </h3>
           </Link>
 
           {post.excerpt && (
-            <p className="mt-0.5 text-[0.72rem] font-sans text-[#8b949e] line-clamp-1 leading-[1.5] hidden sm:block">
+            <p className="mt-0.5 text-[0.73rem] font-sans text-g500 line-clamp-1 leading-[1.5] hidden sm:block">
               {post.excerpt}
             </p>
           )}
 
-          <div className="mt-1.5 flex items-center gap-1.5 text-[0.6rem] font-mono text-[#484f58] flex-wrap">
-            {post.source_name && <span className="text-[#8b949e]">{post.source_name}</span>}
+          <div className="mt-1.5 flex items-center gap-1.5 text-[0.6rem] font-mono text-g400 flex-wrap">
+            {post.source_name && <span className="text-g500">{post.source_name}</span>}
             {post.source_name && <span>·</span>}
             <span>{timeAgo(post.published_at)}</span>
             <span className="hidden sm:inline">·</span>
@@ -742,7 +788,7 @@ const TABS = [
 
 const NEWS_REFRESH_MS  = 5 * 60 * 1000
 const PRICE_REFRESH_MS = 60 * 1000
-const PAGE_SIZE = 50   // larger initial fetch → more results per tab filter
+const PAGE_SIZE = 50
 
 export default function Market() {
   const [posts, setPosts]                 = useState([])
@@ -795,9 +841,7 @@ export default function Market() {
     loadNews(next, true)
   }
 
-  // ── Tab filter ─────────────────────────────────────────────────────────────
   // "All Markets" shows every post — no keyword gate.
-  // Specific tabs filter by asset tab category.
   const filtered = tab === 'all'
     ? posts
     : posts.filter(post => detectAssets(post.title, post.excerpt).some(a => a.tab === tab))
@@ -814,23 +858,27 @@ export default function Market() {
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 py-6 md:py-8">
 
         {/* Page header */}
-        <div className="mb-5 pb-4 border-b border-[#21262d] flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="mb-6 pb-5 border-b border-g200 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2.5 mb-1">
-              <h1 className="font-serif font-bold text-2xl sm:text-3xl text-[#e6edf3] tracking-[-0.02em]">
+            <div className="text-[0.6rem] font-mono uppercase tracking-[0.16em] text-g400 mb-2">
+              Financial Markets
+            </div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="font-serif font-bold text-ink leading-none tracking-[-0.025em]"
+                style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)' }}>
                 Markets
               </h1>
-              <span className="text-[0.55rem] font-mono uppercase tracking-[0.14em] text-emerald-400 font-bold border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 rounded-sm">
+              <span className="text-[0.52rem] font-mono uppercase tracking-[0.14em] text-emerald-700 font-bold border border-emerald-200 bg-emerald-50 px-2 py-0.5 rounded-sm">
                 Live
               </span>
             </div>
-            <p className="text-[0.72rem] font-sans text-[#8b949e]">
-              Live prices · sessions · economic calendar · asset impact analysis
+            <p className="text-[0.75rem] font-sans text-g500">
+              Prices · sessions · economic calendar · sentiment analysis
             </p>
           </div>
           <button
             onClick={() => { setPage(1); loadNews(1); loadPrices() }}
-            className="self-start sm:self-auto text-[0.6rem] font-mono text-[#8b949e] hover:text-emerald-400 transition-colors flex items-center gap-1.5 border border-[#30363d] hover:border-emerald-700 px-3 py-1.5 rounded-sm"
+            className="self-start sm:self-auto text-[0.62rem] font-mono text-g500 hover:text-ink transition-colors flex items-center gap-1.5 border border-g200 hover:border-g400 px-3 py-1.5 rounded-sm bg-paper"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -847,9 +895,9 @@ export default function Market() {
 
         {/* Asset watchlist */}
         {(loading && pricesLoading) ? (
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+          <div className="flex gap-2.5 mb-5 overflow-x-auto pb-2">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0 w-[138px] h-[100px] bg-[#161b22] animate-pulse rounded-sm border border-[#21262d]" />
+              <div key={i} className="flex-shrink-0 w-[148px] h-[108px] bg-g100 animate-pulse rounded-sm border border-g200" />
             ))}
           </div>
         ) : (
@@ -860,26 +908,26 @@ export default function Market() {
         <EconomicCalendar />
 
         {/* Tabs */}
-        <div className="flex items-center border-b border-[#21262d] mb-4 overflow-x-auto">
+        <div className="flex items-center border-b border-g200 mb-5 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               title={t.desc}
-              className={`text-[0.66rem] sm:text-[0.7rem] font-mono uppercase tracking-[0.1em] px-3 sm:px-5 py-3 border-b-2 whitespace-nowrap transition-colors ${
+              className={`text-[0.66rem] sm:text-[0.7rem] font-mono uppercase tracking-[0.1em] px-4 sm:px-5 py-3 border-b-2 whitespace-nowrap transition-colors ${
                 tab === t.id
-                  ? 'border-emerald-500 text-emerald-400 font-medium'
-                  : 'border-transparent text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161b22]/50'
+                  ? 'border-ink text-ink font-semibold'
+                  : 'border-transparent text-g400 hover:text-ink hover:border-g300'
               }`}
             >
               {t.label}
             </button>
           ))}
           <div className="flex-1" />
-          <div className="hidden lg:flex items-center gap-3 text-[0.52rem] font-mono text-[#484f58] px-2 pb-0.5 shrink-0">
-            <span className="flex items-center gap-1"><span className="text-emerald-400">▲</span> Bullish signal</span>
-            <span className="flex items-center gap-1"><span className="text-red-400">▼</span> Bearish signal</span>
-            <span className="flex items-center gap-1"><span className="opacity-60">●●</span> High confidence</span>
+          <div className="hidden lg:flex items-center gap-4 text-[0.52rem] font-mono text-g400 px-2 pb-0.5 shrink-0">
+            <span className="flex items-center gap-1"><span className="text-emerald-600">▲</span> Bullish</span>
+            <span className="flex items-center gap-1"><span className="text-red-600">▼</span> Bearish</span>
+            <span className="flex items-center gap-1"><span className="text-g400 opacity-60">●●</span> High confidence</span>
           </div>
         </div>
 
@@ -887,24 +935,24 @@ export default function Market() {
         {loading ? (
           <div>
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="animate-pulse flex gap-3 border-b border-[#21262d] py-3.5">
-                <div className="w-[82px] h-[54px] sm:w-[112px] sm:h-[74px] bg-[#161b22] shrink-0 rounded-sm" />
+              <div key={i} className="animate-pulse flex gap-3.5 border-b border-g200 py-4">
+                <div className="w-[84px] h-[56px] sm:w-[116px] sm:h-[77px] bg-g100 shrink-0 rounded-sm" />
                 <div className="flex-1 space-y-2 py-0.5">
-                  <div className="flex gap-1">
-                    <div className="h-3.5 bg-[#161b22] w-12 rounded-sm" />
-                    <div className="h-3.5 bg-[#161b22] w-10 rounded-sm" />
+                  <div className="flex gap-1.5">
+                    <div className="h-3.5 bg-g100 w-12 rounded-sm" />
+                    <div className="h-3.5 bg-g100 w-10 rounded-sm" />
                   </div>
-                  <div className="h-4 bg-[#161b22] w-full rounded-sm" />
-                  <div className="h-3 bg-[#161b22] w-3/4 rounded-sm" />
-                  <div className="h-3 bg-[#161b22] w-1/4 rounded-sm" />
+                  <div className="h-4 bg-g100 w-full rounded-sm" />
+                  <div className="h-3 bg-g100 w-3/4 rounded-sm" />
+                  <div className="h-3 bg-g100 w-1/4 rounded-sm" />
                 </div>
               </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-20 text-center">
-            <p className="text-[1.3rem] font-serif text-[#8b949e] mb-2">No results</p>
-            <p className="text-sm font-mono text-[#484f58]">
+            <p className="font-serif text-xl text-g500 mb-2">No results</p>
+            <p className="text-[0.82rem] font-sans text-g400">
               {tab === 'all'
                 ? 'No articles loaded yet. Check back in a few minutes.'
                 : `No ${TABS.find(t => t.id === tab)?.label} stories in the current batch.`}
@@ -912,18 +960,18 @@ export default function Market() {
           </div>
         ) : (
           <div>
-            <div className="mb-2 text-[0.58rem] font-mono text-[#484f58]">
+            <div className="mb-3 text-[0.6rem] font-mono text-g400">
               {filtered.length} {filtered.length === 1 ? 'story' : 'stories'}
-              {tab !== 'all' && ' with market impact'}
+              {tab !== 'all' && ' with market signals'}
             </div>
             {filtered.map(post => (
               <MarketArticleRow key={post.id} post={post} />
             ))}
             {hasMore && (
-              <div className="mt-6 text-center">
+              <div className="mt-8 text-center">
                 <button
                   onClick={loadMore}
-                  className="px-8 py-2.5 border border-[#30363d] text-[0.72rem] font-mono uppercase tracking-[0.1em] text-[#8b949e] hover:border-emerald-700 hover:text-emerald-400 transition-colors rounded-sm"
+                  className="px-8 py-2.5 border border-ink text-[0.72rem] font-mono uppercase tracking-widest text-ink hover:bg-ink hover:text-paper transition-colors"
                 >
                   Load more
                 </button>
