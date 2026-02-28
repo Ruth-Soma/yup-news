@@ -1,13 +1,13 @@
 /**
- * Market.jsx — Professional markets page for forex & futures traders.
+ * Market.jsx — Professional markets page for forex, futures & crypto traders.
  *
  * Features:
- * - Permanent asset watchlist (GOLD, OIL, SILVER, NAT GAS, EUR, USD, GBP, JPY, S&P 500, COPPER)
- *   showing bullish / bearish / neutral based on recent news, auto-refreshes every 5 min
+ * - Live prices from Yahoo Finance via get-market-prices edge function (refreshes every 60s)
+ * - Permanent asset watchlist always showing all assets with price, % change, and news sentiment
+ * - BTC / ETH crypto tab
  * - Only business + finance + breaking-news (no politics bleed-through)
- * - Articles must match at least one asset to appear in non-"All" tabs
- * - Tabs: All · Forex · Futures & Commodities
- * - Responsive at all breakpoints
+ * - Articles scored for asset impact using advanced multi-factor keyword detection
+ * - Tabs: All · Forex · Futures & Commodities · Crypto
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -18,141 +18,353 @@ import SEO from '@/components/ui/SEO'
 import { getMarketPosts } from '@/lib/queries'
 import { timeAgo, readingTime, placeholderImage, flagEmoji } from '@/lib/utils'
 
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 // ─── Asset definitions ─────────────────────────────────────────────────────────
+// Must stay in sync with get-market-prices/index.ts ASSETS array
 
 const ASSETS = [
-  // Commodities — shown first in the watchlist
-  { symbol: 'GOLD',    label: 'Gold',         tab: 'futures', icon: '🥇',
-    keywords: ['gold','bullion','xau','spot gold','gold price','gold futures','precious metal','gold market','yellow metal'] },
-  { symbol: 'SILVER',  label: 'Silver',       tab: 'futures', icon: '🥈',
-    keywords: ['silver','xag','spot silver','silver price'] },
-  { symbol: 'OIL',     label: 'Crude Oil',    tab: 'futures', icon: '🛢️',
-    keywords: ['oil','crude','brent','wti','petroleum','opec','barrel price','oil price','energy price','oil market'] },
-  { symbol: 'NAT GAS', label: 'Natural Gas',  tab: 'futures', icon: '🔥',
-    keywords: ['natural gas','nat gas','lng','gas price','gas supply','gas market'] },
-  { symbol: 'COPPER',  label: 'Copper',       tab: 'futures', icon: '🟤',
-    keywords: ['copper','copper price','base metal'] },
-  { symbol: 'S&P 500', label: 'S&P 500',      tab: 'futures', icon: '📈',
-    keywords: ["s&p 500","s&p500","sp 500","wall street","stock market","equities","nasdaq","dow jones","us stocks","s&p index"] },
-  { symbol: 'WHEAT',   label: 'Wheat',        tab: 'futures', icon: '🌾',
-    keywords: ['wheat','grain price','food inflation','cereal price'] },
-  // Forex majors
-  { symbol: 'USD',     label: 'US Dollar',    tab: 'forex',   icon: '💵',
-    keywords: ['dollar index','us dollar','usd strengthens','usd weakens','federal reserve','fed rate','fomc','powell','treasury yield','dollar rises','dollar falls'] },
-  { symbol: 'EUR',     label: 'Euro',         tab: 'forex',   icon: '💶',
-    keywords: ['euro zone','eurozone gdp','ecb rate','european central bank','euro strengthens','euro falls','eur/usd','eurusd','lagarde'] },
-  { symbol: 'GBP',     label: 'Pound',        tab: 'forex',   icon: '💷',
-    keywords: ['sterling','pound strengthens','pound falls','bank of england rate','gbp/usd','gbpusd','uk inflation','uk gdp'] },
-  { symbol: 'JPY',     label: 'Yen',          tab: 'forex',   icon: '💴',
-    keywords: ['japanese yen','yen weakens','yen strengthens','bank of japan','boj rate','usd/jpy','usdjpy','yen intervention'] },
-  { symbol: 'CHF',     label: 'Swiss Franc',  tab: 'forex',   icon: '🇨🇭',
-    keywords: ['swiss franc','chf','swiss national bank','snb rate'] },
-  { symbol: 'CNY',     label: 'Yuan',         tab: 'forex',   icon: '🇨🇳',
-    keywords: ['chinese yuan','renminbi','yuan rate','pboc','peoples bank of china','cny'] },
+  // ── Futures & Commodities ──────────────────────────────────────────────────
+  { key: 'GOLD',   symbol: 'GOLD',   label: 'Gold',        tab: 'futures', icon: '🥇',
+    keywords: ['gold','bullion','xau','spot gold','gold price','gold futures','precious metal',
+               'gold reserve','gold demand','central bank gold','gold rally','gold slump',
+               'yellow metal','gold output','gold mine','gold production'] },
+
+  { key: 'SILVER', symbol: 'SILVER', label: 'Silver',      tab: 'futures', icon: '🥈',
+    keywords: ['silver','xag','spot silver','silver price','silver futures','silver demand',
+               'industrial silver','silver mine','silver output'] },
+
+  { key: 'OIL',    symbol: 'OIL',    label: 'Crude Oil',   tab: 'futures', icon: '🛢️',
+    keywords: ['crude oil','brent','wti','petroleum','opec','barrel','oil price','energy price',
+               'oil market','oil supply','oil output','oil demand','oil inventory',
+               'oil production cut','opec+','oil embargo','refinery','oil sanctions',
+               'oil glut','oil shortage','energy crisis','oil export'] },
+
+  { key: 'NATGAS', symbol: 'NATGAS', label: 'Natural Gas',  tab: 'futures', icon: '🔥',
+    keywords: ['natural gas','nat gas','lng','gas price','gas supply','gas market',
+               'gas pipeline','gas shortage','gas storage','gas demand',
+               'liquefied natural gas','gas export','gas import','gas crisis'] },
+
+  { key: 'COPPER', symbol: 'COPPER', label: 'Copper',       tab: 'futures', icon: '🪙',
+    keywords: ['copper','copper price','base metal','copper demand','copper supply',
+               'copper mine','copper futures','copper output','copper deficit',
+               'industrial metal','copper import','copper export','dr congo copper',
+               'chile copper','zambia copper'] },
+
+  { key: 'SP500',  symbol: 'SP500',  label: 'S&P 500',     tab: 'futures', icon: '📈',
+    keywords: ["s&p 500","s&p500","sp500","wall street","stock market","equities",
+               "nasdaq","dow jones","us stocks","us equities","us index",
+               "stock sell-off","stock rally","equity market","fed rate decision",
+               "earnings season","corporate earnings","market correction","market crash",
+               "risk appetite","investor sentiment","us economy"] },
+
+  { key: 'WHEAT',  symbol: 'WHEAT',  label: 'Wheat',        tab: 'futures', icon: '🌾',
+    keywords: ['wheat','grain price','food inflation','cereal','grain market',
+               'wheat supply','wheat demand','wheat export','black sea grain',
+               'ukraine grain','russia grain','food security','food crisis',
+               'crop yield','harvest','drought crop','wheat futures'] },
+
+  // ── Forex Majors ───────────────────────────────────────────────────────────
+  { key: 'EUR',    symbol: 'EUR',    label: 'EUR/USD',     tab: 'forex',   icon: '💶',
+    keywords: ['euro','eurozone','ecb','european central bank','lagarde',
+               'eur/usd','eurusd','euro strengthens','euro weakens','euro falls',
+               'eurozone gdp','eurozone inflation','eurozone economy','eu economy',
+               'ecb rate','ecb hike','ecb cut','german economy','eu recession'] },
+
+  { key: 'GBP',   symbol: 'GBP',    label: 'GBP/USD',     tab: 'forex',   icon: '💷',
+    keywords: ['sterling','pound','gbp','bank of england','boe rate',
+               'gbp/usd','gbpusd','pound strengthens','pound weakens','pound falls',
+               'uk inflation','uk gdp','uk economy','uk recession','bailey boe',
+               'uk budget','uk interest rate','uk rate hike','uk rate cut'] },
+
+  { key: 'JPY',   symbol: 'JPY',    label: 'USD/JPY',     tab: 'forex',   icon: '💴',
+    keywords: ['yen','jpy','bank of japan','boj','usdjpy','usd/jpy',
+               'yen weakens','yen strengthens','yen intervention','japan rate',
+               'boj policy','japan inflation','japan gdp','ueda boj',
+               'yen carry trade','japan economy','japanese yen'] },
+
+  { key: 'CHF',   symbol: 'CHF',    label: 'USD/CHF',     tab: 'forex',   icon: '🇨🇭',
+    keywords: ['swiss franc','chf','snb','swiss national bank','jordan snb',
+               'switzerland inflation','safe haven currency','chf strengthens',
+               'switzerland gdp','snb rate','swiss economy'] },
+
+  { key: 'CNY',   symbol: 'CNY',    label: 'USD/CNY',     tab: 'forex',   icon: '🇨🇳',
+    keywords: ['yuan','renminbi','cny','pboc','peoples bank of china',
+               'china currency','yuan devaluation','yuan weakens','yuan strengthens',
+               'china rate','pboc rate cut','china economy','china gdp',
+               'china trade','china exports','offshore yuan'] },
+
+  // ── Crypto ─────────────────────────────────────────────────────────────────
+  { key: 'BTC',   symbol: 'BTC',    label: 'Bitcoin',      tab: 'crypto',  icon: '₿',
+    keywords: ['bitcoin','btc','crypto','cryptocurrency','digital asset',
+               'bitcoin price','btc rally','btc crash','bitcoin etf','spot btc etf',
+               'bitcoin halving','satoshi','lightning network','bitcoin mining',
+               'bitcoin adoption','institutional bitcoin','btc futures',
+               'blackrock bitcoin','bitcoin regulation','crypto market',
+               'crypto crackdown','crypto rally','crypto sell-off'] },
+
+  { key: 'ETH',   symbol: 'ETH',    label: 'Ethereum',     tab: 'crypto',  icon: '⟠',
+    keywords: ['ethereum','eth','ether','defi','nft market','smart contract',
+               'ethereum price','eth rally','ethereum network','layer 2',
+               'ethereum staking','proof of stake','ethereum etf','vitalik',
+               'crypto token','altcoin','ethereum upgrade'] },
 ]
 
-// Broader multi-word patterns to match in either title or excerpt
-const BULLISH_RE = /\b(surge|surges|surged|soar|soars|soared|rally|rallies|rallied|gain|gains|gained|rise|rises|rose|climb|climbs|climbed|jump|jumps|jumped|advance|advances|boost|boosted|record high|all.time high|strengthen|strengthens|stabilise|recover|recovers|rebounds|rebound|upswing|bullish|rate cut|rate cuts|stimulus|eases|easing|growth beat|strong gdp|strong data)\b/i
-const BEARISH_RE = /\b(fall|falls|fell|drop|drops|dropped|plunge|plunges|plunged|crash|crashes|crashed|decline|declines|declined|tumble|tumbles|tumbled|slide|slides|slid|sink|sinks|sank|weak|weakens|weakened|threat|crisis|war|attack|strike|sanction|sanctions|recession|fear|fears|sell.?off|bearish|pressure|risk|concern|warns|warning|halt|ban|tariff|tariffs|inflation surge|rate hike|rate hikes|stagflation|supply shock)\b/i
+// ─── Advanced sentiment engine ────────────────────────────────────────────────
+//
+// Each pattern includes a WEIGHT (1–3) reflecting market impact magnitude.
+// Context-aware: "rate hike" is bearish for gold but bullish for USD —
+// handled by asset-specific overrides in detectAssets().
+
+const BULLISH_SIGNALS = [
+  // Strong price action signals  (weight 3)
+  { re: /\b(surge|surged|surges|soar|soared|soars|rocket|rocketed|skyrocket|spike|spiked)\b/i,       w: 3 },
+  { re: /\b(record high|all.time high|multi.year high|52.week high|historic high)\b/i,                 w: 3 },
+  { re: /\b(short squeeze|massive rally|strong rally|explosive rally)\b/i,                             w: 3 },
+  // Moderate bullish signals     (weight 2)
+  { re: /\b(rally|rallies|rallied|climb|climbed|climbs|advance|advances|advanced)\b/i,                 w: 2 },
+  { re: /\b(rise|rises|rose|gain|gains|gained|rebound|rebounds|rebounded|bounce|bounced)\b/i,          w: 2 },
+  { re: /\b(strengthen|strengthened|strengthens|appreciate|appreciated|recovery)\b/i,                  w: 2 },
+  { re: /\b(rate cut|rate cuts|easing|monetary easing|quantitative easing|qe|stimulus)\b/i,            w: 2 },
+  { re: /\b(strong gdp|gdp beat|growth beat|better.than.expected|beats forecast|beat estimates)\b/i,   w: 2 },
+  { re: /\b(supply cut|production cut|opec cut|output cut|quota cut)\b/i,                              w: 2 },
+  { re: /\b(safe haven|flight to safety|risk.off buying|demand surge)\b/i,                             w: 2 },
+  { re: /\b(etf inflow|institutional buying|central bank buying|reserve accumulation)\b/i,             w: 2 },
+  { re: /\b(halving|adoption surge|mainstream adoption|regulatory approval|spot etf approved)\b/i,    w: 2 },
+  // Mild bullish signals          (weight 1)
+  { re: /\b(jump|jumped|jumps|boost|boosted|lift|lifts|lifted|tick up|edge up|inch up)\b/i,            w: 1 },
+  { re: /\b(stabilise|stabilize|stabilised|floor|bottomed|support level)\b/i,                          w: 1 },
+  { re: /\b(positive outlook|bullish|upside|upbeat|optimistic)\b/i,                                    w: 1 },
+  { re: /\b(lower inflation|inflation cools|inflation falls|disinflation)\b/i,                         w: 1 },
+]
+
+const BEARISH_SIGNALS = [
+  // Strong bearish signals         (weight 3)
+  { re: /\b(crash|crashed|crashes|collapse|collapsed|collapses|plunge|plunged|plunges)\b/i,            w: 3 },
+  { re: /\b(record low|all.time low|multi.year low|52.week low|historic low)\b/i,                      w: 3 },
+  { re: /\b(bank run|financial crisis|liquidity crisis|default|sovereign default)\b/i,                 w: 3 },
+  { re: /\b(war|invasion|invaded|airstrike|nuclear|chemical attack|weapon of mass)\b/i,                w: 3 },
+  // Moderate bearish signals       (weight 2)
+  { re: /\b(fall|falls|fell|drop|drops|dropped|decline|declines|declined|tumble|tumbled)\b/i,          w: 2 },
+  { re: /\b(slide|slides|slid|sink|sinks|sank|slump|slumped|slumps|plummet|plummeted)\b/i,            w: 2 },
+  { re: /\b(rate hike|rate hikes|tightening|hawkish|aggressive hike|supersized hike)\b/i,              w: 2 },
+  { re: /\b(recession|stagflation|contraction|gdp miss|gdp shrinks|negative growth)\b/i,               w: 2 },
+  { re: /\b(tariff|tariffs|sanction|sanctions|embargo|trade war|trade ban|export ban)\b/i,             w: 2 },
+  { re: /\b(supply glut|oversupply|inventory build|demand slump|demand collapse)\b/i,                  w: 2 },
+  { re: /\b(sell.?off|liquidation|margin call|forced selling|etf outflow|capital flight)\b/i,          w: 2 },
+  { re: /\b(exchange hack|exchange collapse|fraud|rug pull|scam|ban crypto|crypto ban)\b/i,            w: 2 },
+  // Mild bearish signals            (weight 1)
+  { re: /\b(weak|weakens|weakened|soften|softens|ease lower|retreat|retreats|retreated)\b/i,           w: 1 },
+  { re: /\b(concern|concerns|fear|fears|risk|uncertainty|warn|warning|caution)\b/i,                    w: 1 },
+  { re: /\b(hawkish|tighten|tightening|higher for longer|elevated rates)\b/i,                          w: 1 },
+  { re: /\b(bearish|downside|downbeat|pessimistic|negative outlook)\b/i,                               w: 1 },
+  { re: /\b(inflation surge|inflation spike|inflation accelerates|inflation high)\b/i,                 w: 1 },
+]
+
+// Asset-specific context overrides: certain macro events affect assets in OPPOSITE directions.
+// e.g. "rate hike" is bearish for gold/equities but bullish for USD.
+const ASSET_CONTEXT = {
+  USD:   { bullish_extra: [/\b(rate hike|hawkish|fed hike|strong jobs|nonfarm payroll beat)\b/i],
+           bearish_extra: [/\b(rate cut|dovish|fed cut|weak jobs|jobs miss)\b/i] },
+  JPY:   { bullish_extra: [/\b(boj hike|boj raises|yield curve control end|japan tightening)\b/i],
+           bearish_extra: [/\b(boj hold|yield curve control|boj easing|boj stimulus)\b/i] },
+  CHF:   { bullish_extra: [/\b(safe haven|geopolitical risk|flight to safety|swiss franc)\b/i],
+           bearish_extra: [/\b(snb cut|snb negative rate|risk.on)\b/i] },
+  GOLD:  { bullish_extra: [/\b(war|geopolitical|safe haven|inflation hedge|dollar weakens|fed pivot)\b/i],
+           bearish_extra: [/\b(rate hike|real yield rise|dollar rally|risk appetite)\b/i] },
+  BTC:   { bullish_extra: [/\b(etf inflow|halving|institutional|blackrock|fidelity bitcoin|spot etf)\b/i],
+           bearish_extra: [/\b(ban|crackdown|sec action|regulation tighten|exchange collapse)\b/i] },
+  SP500: { bullish_extra: [/\b(rate cut|fed pivot|earnings beat|gdp beat|soft landing)\b/i],
+           bearish_extra: [/\b(rate hike|recession fear|earnings miss|gdp miss|yield inversion)\b/i] },
+}
+
+function scoreSentiment(text) {
+  let bull = 0
+  let bear = 0
+  for (const sig of BULLISH_SIGNALS) if (sig.re.test(text)) bull += sig.w
+  for (const sig of BEARISH_SIGNALS) if (sig.re.test(text)) bear += sig.w
+  return { bull, bear }
+}
 
 function detectAssets(title, excerpt) {
   const text = `${title} ${excerpt || ''}`.toLowerCase()
+  const full  = `${title} ${excerpt || ''}`   // keep case for context overrides
   const found = []
+
   for (const asset of ASSETS) {
-    if (asset.keywords.some(kw => text.includes(kw))) {
-      const combined = `${title} ${excerpt || ''}`.toLowerCase()
-      let dir = 'neutral'
-      if (BULLISH_RE.test(combined)) dir = 'bullish'
-      else if (BEARISH_RE.test(combined)) dir = 'bearish'
-      found.push({ ...asset, dir })
+    if (!asset.keywords.some(kw => text.includes(kw))) continue
+
+    let { bull, bear } = scoreSentiment(full)
+
+    // Apply asset-specific context overrides
+    const ctx = ASSET_CONTEXT[asset.key]
+    if (ctx) {
+      for (const re of (ctx.bullish_extra || [])) if (re.test(full)) bull += 2
+      for (const re of (ctx.bearish_extra || [])) if (re.test(full)) bear += 2
     }
+
+    const dir = bull > bear ? 'bullish' : bear > bull ? 'bearish' : 'neutral'
+    const confidence = Math.abs(bull - bear)   // higher = more certain
+    found.push({ ...asset, dir, bull, bear, confidence })
   }
   return found
 }
 
-// ─── Asset watchlist card ──────────────────────────────────────────────────────
+// ─── Price formatting ─────────────────────────────────────────────────────────
 
-function WatchlistCard({ asset }) {
-  const { symbol, label, icon, bullish = 0, bearish = 0, neutral = 0 } = asset
-  const total = bullish + bearish + neutral
-  const net = total === 0 ? 'no-data' : bullish > bearish ? 'bullish' : bearish > bullish ? 'bearish' : 'neutral'
+function fmtPrice(price, key, decimals) {
+  if (price == null) return '--'
+  if (key === 'BTC') return `$${Math.round(price).toLocaleString('en-US')}`
+  if (key === 'ETH') return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (key === 'SP500') return price.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (['EUR','GBP','JPY','CHF','CNY'].includes(key)) return price.toFixed(decimals ?? 4)
+  if (['NATGAS','COPPER','SILVER'].includes(key)) return `$${price.toFixed(decimals ?? 3)}`
+  return `$${price.toFixed(decimals ?? 2)}`
+}
 
-  const styles = {
-    bullish:  { card: 'border-emerald-200 bg-emerald-50',  text: 'text-emerald-700', badge: 'bg-emerald-500 text-white', arrow: '▲', label: 'Bullish' },
-    bearish:  { card: 'border-red-200 bg-red-50',          text: 'text-red-700',     badge: 'bg-red-500 text-white',     arrow: '▼', label: 'Bearish' },
-    neutral:  { card: 'border-amber-200 bg-amber-50',      text: 'text-amber-700',   badge: 'bg-amber-500 text-white',   arrow: '—', label: 'Neutral' },
-    'no-data':{ card: 'border-g200 bg-g50',                text: 'text-g400',        badge: 'bg-g300 text-white',        arrow: '·', label: 'No data' },
+function fmtPct(pct) {
+  if (pct == null) return null
+  const sign = pct >= 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
+// ─── Watchlist card ───────────────────────────────────────────────────────────
+
+function WatchlistCard({ asset, priceData }) {
+  const { key, label, icon, bullish = 0, bearish = 0, neutral = 0 } = asset
+  const total  = bullish + bearish + neutral
+  const net    = total === 0 ? 'no-data' : bullish > bearish ? 'bullish' : bearish > bullish ? 'bearish' : 'neutral'
+
+  const price  = priceData?.price ?? null
+  const pct    = priceData?.changePercent ?? null
+  const change = priceData?.change ?? null
+
+  const priceDirUp   = pct != null && pct > 0
+  const priceDirDown = pct != null && pct < 0
+
+  // Card border/bg driven by LIVE price direction (more reliable than news sentiment alone)
+  const liveDir = priceDirUp ? 'up' : priceDirDown ? 'down' : 'flat'
+
+  const cardStyle = {
+    up:      'border-emerald-200 bg-emerald-50/70',
+    down:    'border-red-200 bg-red-50/70',
+    flat:    'border-g200 bg-g50',
+    'no-data': 'border-g200 bg-g50',
   }
-  const s = styles[net]
+
+  const sentimentBadge = {
+    bullish:   { cls: 'bg-emerald-500 text-white', label: '▲ BULL' },
+    bearish:   { cls: 'bg-red-500 text-white',     label: '▼ BEAR' },
+    neutral:   { cls: 'bg-amber-400 text-white',   label: '— NEU'  },
+    'no-data': { cls: 'bg-g300 text-white',         label: '· N/A'  },
+  }
+  const badge = sentimentBadge[net]
 
   return (
-    <div className={`flex-shrink-0 w-[110px] sm:w-[120px] border rounded-sm p-2.5 ${s.card}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-base leading-none">{icon}</span>
-        <span className={`text-[0.52rem] font-mono font-bold px-1 py-0.5 rounded-sm ${s.badge}`}>
-          {s.arrow} {s.label.toUpperCase()}
+    <div className={`flex-shrink-0 w-[130px] sm:w-[142px] border rounded-sm p-2.5 ${cardStyle[price != null ? liveDir : 'flat']}`}>
+      {/* Top row: icon + sentiment badge */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[1rem] leading-none">{icon}</span>
+        <span className={`text-[0.48rem] font-mono font-bold px-1 py-0.5 rounded-sm leading-tight ${badge.cls}`}>
+          {badge.label}
         </span>
       </div>
-      <div className={`text-[0.8rem] font-mono font-bold ${s.text}`}>{symbol}</div>
-      <div className="text-[0.6rem] font-sans text-g500 leading-tight">{label}</div>
+
+      {/* Symbol */}
+      <div className="text-[0.78rem] font-mono font-bold text-ink leading-none mb-0.5">{label}</div>
+
+      {/* Live price */}
+      <div className={`text-[0.85rem] font-mono font-bold leading-tight tabular-nums ${
+        priceDirUp ? 'text-emerald-700' : priceDirDown ? 'text-red-600' : 'text-ink'
+      }`}>
+        {fmtPrice(price, key, priceData?.decimals)}
+      </div>
+
+      {/* % change */}
+      {pct != null ? (
+        <div className={`text-[0.6rem] font-mono font-medium leading-tight tabular-nums ${
+          priceDirUp ? 'text-emerald-600' : priceDirDown ? 'text-red-500' : 'text-g400'
+        }`}>
+          {fmtPct(pct)} today
+        </div>
+      ) : (
+        <div className="text-[0.58rem] font-mono text-g300 leading-tight">price unavailable</div>
+      )}
+
+      {/* News signal count */}
       {total > 0 && (
-        <div className="mt-1.5 text-[0.55rem] font-mono text-g400">
-          {bullish}↑ {bearish}↓ {neutral}—
+        <div className="mt-1 pt-1 border-t border-g200/60 text-[0.52rem] font-mono text-g400 flex gap-1">
+          <span className="text-emerald-600">{bullish}↑</span>
+          <span className="text-red-500">{bearish}↓</span>
+          <span className="text-g400">{neutral}—</span>
+          <span className="text-g300 ml-auto">news</span>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Asset watchlist bar ───────────────────────────────────────────────────────
+// ─── Asset watchlist bar ──────────────────────────────────────────────────────
 
-function AssetWatchlist({ posts, lastUpdated }) {
-  // Aggregate sentiment for every asset across all fetched posts
+function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
+  // Aggregate news sentiment per asset
   const tally = {}
-  for (const asset of ASSETS) {
-    tally[asset.symbol] = { ...asset, bullish: 0, bearish: 0, neutral: 0 }
-  }
+  for (const a of ASSETS) tally[a.key] = { ...a, bullish: 0, bearish: 0, neutral: 0 }
   for (const post of posts) {
-    const detected = detectAssets(post.title, post.excerpt)
-    for (const a of detected) {
-      if (tally[a.symbol]) tally[a.symbol][a.dir]++
+    for (const a of detectAssets(post.title, post.excerpt)) {
+      if (tally[a.key]) tally[a.key][a.dir]++
     }
   }
-  const ordered = ASSETS.map(a => tally[a.symbol])
+
+  // Build price lookup keyed by asset key
+  const priceMap = {}
+  for (const p of (prices || [])) priceMap[p.key] = p
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g500">
-          Asset Sentiment — based on latest news
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+        <span className="text-[0.58rem] font-mono uppercase tracking-[0.14em] text-g500">
+          Live Prices &amp; News Sentiment
         </span>
-        {lastUpdated && (
-          <span className="text-[0.55rem] font-mono text-g400 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-            Updated {timeAgo(lastUpdated)}
-          </span>
-        )}
+        <div className="flex items-center gap-3 text-[0.52rem] font-mono text-g400">
+          {pricesUpdated && (
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              Prices {timeAgo(pricesUpdated)}
+            </span>
+          )}
+          {lastUpdated && (
+            <span>News {timeAgo(lastUpdated)}</span>
+          )}
+        </div>
       </div>
-      {/* Horizontal scroll on mobile, wrap on desktop */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-        {ordered.map(a => <WatchlistCard key={a.symbol} asset={a} />)}
+        {ASSETS.map(a => (
+          <WatchlistCard key={a.key} asset={tally[a.key]} priceData={priceMap[a.key]} />
+        ))}
       </div>
     </div>
   )
 }
 
-// ─── Inline asset badge ────────────────────────────────────────────────────────
+// ─── Inline asset badge on articles ──────────────────────────────────────────
 
-function AssetBadge({ symbol, dir }) {
+function AssetBadge({ symbol, dir, confidence }) {
   const c = {
     bullish: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     bearish: 'bg-red-50 text-red-700 border-red-200',
     neutral: 'bg-g100 text-g500 border-g200',
   }
   const arrow = { bullish: '▲', bearish: '▼', neutral: '—' }
+  // Show confidence dots: ● = strong, ◉ = medium, ○ = weak
+  const dots = confidence >= 4 ? '●●' : confidence >= 2 ? '●○' : '○○'
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[0.6rem] font-mono font-medium px-1.5 py-0.5 border rounded-sm ${c[dir]}`}>
-      <span>{arrow[dir]}</span>{symbol}
+    <span className={`inline-flex items-center gap-0.5 text-[0.58rem] font-mono font-medium px-1.5 py-0.5 border rounded-sm ${c[dir]}`}
+      title={`${arrow[dir]} ${dir} signal (strength: ${dots})`}>
+      <span>{arrow[dir]}</span>
+      <span>{symbol}</span>
+      <span className="opacity-50 text-[0.45rem] ml-0.5">{dots}</span>
     </span>
   )
 }
@@ -161,6 +373,8 @@ function AssetBadge({ symbol, dir }) {
 
 function MarketArticleRow({ post }) {
   const assets = detectAssets(post.title, post.excerpt)
+  // Sort by confidence desc so strongest signals show first
+  assets.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
 
   return (
     <article className="group border-b border-g200 py-4 sm:py-5 hover:bg-g50 transition-colors duration-150">
@@ -180,11 +394,11 @@ function MarketArticleRow({ post }) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Asset badges */}
+          {/* Asset impact badges */}
           {assets.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5">
-              {assets.slice(0, 6).map(a => (
-                <AssetBadge key={a.symbol} symbol={a.symbol} dir={a.dir} />
+              {assets.slice(0, 5).map(a => (
+                <AssetBadge key={a.key} symbol={a.key} dir={a.dir} confidence={a.confidence} />
               ))}
             </div>
           )}
@@ -201,7 +415,6 @@ function MarketArticleRow({ post }) {
             </p>
           )}
 
-          {/* Meta */}
           <div className="mt-1.5 flex items-center gap-1.5 sm:gap-2 text-[0.62rem] font-mono text-g400 flex-wrap">
             <span className="font-medium text-g500">{post.source_name || 'YUP'}</span>
             <span>·</span>
@@ -224,25 +437,32 @@ function MarketArticleRow({ post }) {
 // ─── Tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'all',     label: 'All Markets',          desc: 'All market-moving news' },
-  { id: 'forex',   label: 'Forex',                desc: 'Currency pairs & central banks' },
+  { id: 'all',     label: 'All Markets',           desc: 'All market-moving news' },
+  { id: 'forex',   label: 'Forex',                 desc: 'Currency pairs & central banks' },
   { id: 'futures', label: 'Futures & Commodities', desc: 'Gold, Oil, Silver, Nat Gas & more' },
+  { id: 'crypto',  label: 'Crypto',                desc: 'Bitcoin, Ethereum & digital assets' },
 ]
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-const REFRESH_MS = 5 * 60 * 1000  // auto-refresh every 5 minutes
+const NEWS_REFRESH_MS  = 5 * 60 * 1000   // articles refresh every 5 min
+const PRICE_REFRESH_MS = 60 * 1000       // prices refresh every 60 s
 
 export default function Market() {
-  const [posts, setPosts]             = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [page, setPage]               = useState(1)
-  const [hasMore, setHasMore]         = useState(false)
-  const [tab, setTab]                 = useState('all')
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const timerRef = useRef(null)
+  const [posts, setPosts]                 = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [page, setPage]                   = useState(1)
+  const [hasMore, setHasMore]             = useState(false)
+  const [tab, setTab]                     = useState('all')
+  const [lastUpdated, setLastUpdated]     = useState(null)
+  const [prices, setPrices]               = useState([])
+  const [pricesUpdated, setPricesUpdated] = useState(null)
+  const [pricesLoading, setPricesLoading] = useState(true)
+  const newsTimer  = useRef(null)
+  const priceTimer = useRef(null)
 
-  const load = useCallback(async (p = 1, append = false) => {
+  // ── News loader ─────────────────────────────────────────────────────────────
+  const loadNews = useCallback(async (p = 1, append = false) => {
     if (p === 1) setLoading(true)
     const res = await getMarketPosts({ page: p, pageSize: 20 })
     setPosts(prev => append ? [...prev, ...(res.data || [])] : (res.data || []))
@@ -251,40 +471,61 @@ export default function Market() {
     setLoading(false)
   }, [])
 
-  // Initial load + auto-refresh
+  // ── Price loader ────────────────────────────────────────────────────────────
+  const loadPrices = useCallback(async () => {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-market-prices`, {
+        headers: { Authorization: `Bearer ${SUPABASE_ANON}` },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.prices?.length) {
+        setPrices(data.prices)
+        setPricesUpdated(new Date())
+      }
+    } catch { /* prices unavailable — fail silently */ }
+    finally { setPricesLoading(false) }
+  }, [])
+
+  // Initial load
   useEffect(() => {
-    setPosts([])
-    setPage(1)
-    load(1)
-    timerRef.current = setInterval(() => {
+    loadNews(1)
+    loadPrices()
+
+    // Auto-refresh news every 5 min
+    newsTimer.current = setInterval(() => {
       setPosts([])
       setPage(1)
-      load(1)
-    }, REFRESH_MS)
-    return () => clearInterval(timerRef.current)
-  }, [load])
+      loadNews(1)
+    }, NEWS_REFRESH_MS)
+
+    // Auto-refresh prices every 60 s
+    priceTimer.current = setInterval(loadPrices, PRICE_REFRESH_MS)
+
+    return () => {
+      clearInterval(newsTimer.current)
+      clearInterval(priceTimer.current)
+    }
+  }, [loadNews, loadPrices])
 
   function loadMore() {
     const next = page + 1
     setPage(next)
-    load(next, true)
+    loadNews(next, true)
   }
 
-  // Tab filter: require at least one detected asset for non-"all" tabs
+  // Tab filter
   const filtered = posts.filter(post => {
     const assets = detectAssets(post.title, post.excerpt)
-    if (tab === 'all') {
-      // In "All" view, only show articles that mention at least one asset
-      return assets.length > 0
-    }
+    if (tab === 'all') return assets.length > 0
     return assets.some(a => a.tab === tab)
   })
 
   return (
     <>
       <SEO
-        title="Markets — News that moves prices"
-        description="Real-time market news with asset impact analysis for forex and futures traders. Track gold, oil, silver, USD, EUR, S&P 500 and more."
+        title="Markets — Live prices & news impact analysis"
+        description="Real-time prices and market news with asset impact analysis for forex, futures and crypto traders. Gold, Oil, BTC, EUR, S&P 500 and more."
         url="/markets"
       />
       <Header />
@@ -303,12 +544,11 @@ export default function Market() {
               </span>
             </div>
             <p className="text-[0.78rem] sm:text-sm font-sans text-g500">
-              News that moves prices — asset impact for forex &amp; futures traders
+              Live prices · asset impact analysis · forex, futures &amp; crypto
             </p>
           </div>
-          {/* Refresh indicator */}
           <button
-            onClick={() => { setPage(1); load(1) }}
+            onClick={() => { setPage(1); loadNews(1); loadPrices() }}
             className="self-start sm:self-auto text-[0.62rem] font-mono text-g400 hover:text-emerald-600 transition-colors flex items-center gap-1.5 border border-g200 px-3 py-1.5 hover:border-emerald-300"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -318,15 +558,20 @@ export default function Market() {
           </button>
         </div>
 
-        {/* Asset Watchlist */}
-        {loading ? (
+        {/* Asset Watchlist — always shows all assets with live price */}
+        {(loading && pricesLoading) ? (
           <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0 w-[110px] h-[72px] bg-g100 animate-pulse rounded-sm" />
+              <div key={i} className="flex-shrink-0 w-[130px] h-[90px] bg-g100 animate-pulse rounded-sm" />
             ))}
           </div>
         ) : (
-          <AssetWatchlist posts={posts} lastUpdated={lastUpdated} />
+          <AssetWatchlist
+            posts={posts}
+            prices={prices}
+            lastUpdated={lastUpdated}
+            pricesUpdated={pricesUpdated}
+          />
         )}
 
         {/* Tabs */}
@@ -346,11 +591,12 @@ export default function Market() {
             </button>
           ))}
           <div className="flex-1" />
-          {/* Legend — desktop only */}
-          <div className="hidden lg:flex items-center gap-3 text-[0.58rem] font-mono text-g400 px-2 shrink-0 pb-0.5">
+          {/* Strength legend */}
+          <div className="hidden lg:flex items-center gap-3 text-[0.55rem] font-mono text-g400 px-2 shrink-0 pb-0.5">
             <span className="flex items-center gap-1"><span className="text-emerald-600 font-bold">▲</span> Bullish</span>
             <span className="flex items-center gap-1"><span className="text-red-500 font-bold">▼</span> Bearish</span>
-            <span className="flex items-center gap-1"><span className="text-g400">—</span> Neutral</span>
+            <span className="flex items-center gap-1"><span className="opacity-60">●●</span> Strong</span>
+            <span className="flex items-center gap-1"><span className="opacity-60">●○</span> Moderate</span>
           </div>
         </div>
 
@@ -362,8 +608,7 @@ export default function Market() {
                 <div className="w-[88px] h-[58px] sm:w-[120px] sm:h-[78px] bg-g100 shrink-0 rounded-sm" />
                 <div className="flex-1 space-y-2">
                   <div className="flex gap-1">
-                    <div className="h-4 bg-g100 w-12 rounded-sm" />
-                    <div className="h-4 bg-g100 w-10 rounded-sm" />
+                    <div className="h-4 bg-g100 w-12 rounded-sm" /><div className="h-4 bg-g100 w-10 rounded-sm" />
                   </div>
                   <div className="h-4 bg-g100 w-full rounded-sm" />
                   <div className="h-3 bg-g100 w-3/4 rounded-sm" />
@@ -378,7 +623,7 @@ export default function Market() {
             <p className="text-sm font-mono text-g400">
               {tab === 'all'
                 ? 'No market-moving news detected yet. Check back in a few minutes.'
-                : `No ${TABS.find(t => t.id === tab)?.label} stories in the current batch. Try "All Markets".`}
+                : `No ${TABS.find(t => t.id === tab)?.label} stories in the current batch.`}
             </p>
           </div>
         ) : (
