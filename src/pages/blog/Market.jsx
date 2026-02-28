@@ -1,13 +1,14 @@
 /**
- * Market.jsx — Professional markets page for forex, futures & crypto traders.
+ * Market.jsx — Professional markets terminal for forex, futures & crypto traders.
  *
  * Features:
- * - Live prices from Yahoo Finance via get-market-prices edge function (refreshes every 60s)
- * - Permanent asset watchlist always showing all assets with price, % change, and news sentiment
- * - BTC / ETH crypto tab
- * - Only business + finance + breaking-news (no politics bleed-through)
- * - Articles scored for asset impact using advanced multi-factor keyword detection
- * - Tabs: All · Forex · Futures & Commodities · Crypto
+ * - Live market session indicator (Sydney / Tokyo / London / New York)
+ * - Risk-on / Risk-off market pulse banner
+ * - Live prices with intraday high/low range bar (refreshes every 60s)
+ * - Economic calendar — next 14 days of high-impact events
+ * - Asset watchlist with news sentiment signal (bullish / bearish tally)
+ * - Articles: ALL posts in "All Markets" tab; keyword-filtered for specific tabs
+ * - Default 10+ articles shown without needing to click Load More
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -22,119 +23,89 @@ const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ─── Asset definitions ─────────────────────────────────────────────────────────
-// Must stay in sync with get-market-prices/index.ts ASSETS array
 
 const ASSETS = [
-  // ── Futures & Commodities ──────────────────────────────────────────────────
-  { key: 'GOLD',   symbol: 'GOLD',   label: 'Gold',        tab: 'futures', icon: '🥇',
+  { key: 'GOLD',   label: 'Gold',        tab: 'futures', icon: '🥇',
     keywords: ['gold','bullion','xau','spot gold','gold price','gold futures','precious metal',
                'gold reserve','gold demand','central bank gold','gold rally','gold slump',
                'yellow metal','gold output','gold mine','gold production'] },
-
-  { key: 'SILVER', symbol: 'SILVER', label: 'Silver',      tab: 'futures', icon: '🥈',
+  { key: 'SILVER', label: 'Silver',      tab: 'futures', icon: '🥈',
     keywords: ['silver','xag','spot silver','silver price','silver futures','silver demand',
                'industrial silver','silver mine','silver output'] },
-
-  { key: 'OIL',    symbol: 'OIL',    label: 'Crude Oil',   tab: 'futures', icon: '🛢️',
+  { key: 'OIL',    label: 'Crude Oil',   tab: 'futures', icon: '🛢️',
     keywords: ['crude oil','brent','wti','petroleum','opec','barrel','oil price','energy price',
                'oil market','oil supply','oil output','oil demand','oil inventory',
                'oil production cut','opec+','oil embargo','refinery','oil sanctions',
                'oil glut','oil shortage','energy crisis','oil export'] },
-
-  { key: 'NATGAS', symbol: 'NATGAS', label: 'Natural Gas',  tab: 'futures', icon: '🔥',
+  { key: 'NATGAS', label: 'Natural Gas', tab: 'futures', icon: '🔥',
     keywords: ['natural gas','nat gas','lng','gas price','gas supply','gas market',
                'gas pipeline','gas shortage','gas storage','gas demand',
                'liquefied natural gas','gas export','gas import','gas crisis'] },
-
-  { key: 'COPPER', symbol: 'COPPER', label: 'Copper',       tab: 'futures', icon: '🪙',
+  { key: 'COPPER', label: 'Copper',      tab: 'futures', icon: '🪙',
     keywords: ['copper','copper price','base metal','copper demand','copper supply',
                'copper mine','copper futures','copper output','copper deficit',
                'industrial metal','copper import','copper export','dr congo copper',
                'chile copper','zambia copper'] },
-
-  { key: 'SP500',  symbol: 'SP500',  label: 'S&P 500',     tab: 'futures', icon: '📈',
+  { key: 'SP500',  label: 'S&P 500',     tab: 'futures', icon: '📈',
     keywords: ["s&p 500","s&p500","sp500","wall street","stock market","equities",
                "nasdaq","dow jones","us stocks","us equities","us index",
                "stock sell-off","stock rally","equity market","fed rate decision",
                "earnings season","corporate earnings","market correction","market crash",
                "risk appetite","investor sentiment","us economy"] },
-
-  { key: 'WHEAT',  symbol: 'WHEAT',  label: 'Wheat',        tab: 'futures', icon: '🌾',
+  { key: 'WHEAT',  label: 'Wheat',       tab: 'futures', icon: '🌾',
     keywords: ['wheat','grain price','food inflation','cereal','grain market',
                'wheat supply','wheat demand','wheat export','black sea grain',
                'ukraine grain','russia grain','food security','food crisis',
                'crop yield','harvest','drought crop','wheat futures'] },
-
-  // ── Forex Majors ───────────────────────────────────────────────────────────
-  { key: 'EUR',    symbol: 'EUR',    label: 'EUR/USD',     tab: 'forex',   icon: '💶',
+  { key: 'EUR',    label: 'EUR/USD',     tab: 'forex',   icon: '💶',
     keywords: ['euro','eurozone','ecb','european central bank','lagarde',
                'eur/usd','eurusd','euro strengthens','euro weakens','euro falls',
                'eurozone gdp','eurozone inflation','eurozone economy','eu economy',
                'ecb rate','ecb hike','ecb cut','german economy','eu recession',
-               'europe economy','european inflation','european growth','eu gdp',
-               'european market','eu interest rate','ecb meeting','frankfurt',
-               'germany gdp','france gdp','italy gdp','spain gdp','eu trade',
-               'european stocks','euro area','single currency'] },
-
-  { key: 'GBP',   symbol: 'GBP',    label: 'GBP/USD',     tab: 'forex',   icon: '💷',
+               'europe economy','european inflation','eu gdp','ecb meeting'] },
+  { key: 'GBP',   label: 'GBP/USD',     tab: 'forex',   icon: '💷',
     keywords: ['sterling','pound','gbp','bank of england','boe rate',
                'gbp/usd','gbpusd','pound strengthens','pound weakens','pound falls',
                'uk inflation','uk gdp','uk economy','uk recession','bailey boe',
                'uk budget','uk interest rate','uk rate hike','uk rate cut',
-               'britain economy','british pound','london economy','england economy',
-               'andrew bailey','uk trade','uk growth','uk fiscal','uk debt',
-               'autumn statement','spring budget','office for budget responsibility'] },
-
-  { key: 'JPY',   symbol: 'JPY',    label: 'USD/JPY',     tab: 'forex',   icon: '💴',
+               'britain economy','british pound','andrew bailey','uk growth'] },
+  { key: 'JPY',   label: 'USD/JPY',     tab: 'forex',   icon: '💴',
     keywords: ['yen','jpy','bank of japan','boj','usdjpy','usd/jpy',
                'yen weakens','yen strengthens','yen intervention','japan rate',
                'boj policy','japan inflation','japan gdp','ueda boj',
-               'yen carry trade','japan economy','japanese yen','tokyo stocks',
-               'japan trade','japan export','japan import','nikkei',
-               'japan interest rate','japan monetary','boj decision'] },
-
-  { key: 'CHF',   symbol: 'CHF',    label: 'USD/CHF',     tab: 'forex',   icon: '🇨🇭',
+               'yen carry trade','japan economy','tokyo stocks','nikkei',
+               'japan trade','japan interest rate','boj decision'] },
+  { key: 'CHF',   label: 'USD/CHF',     tab: 'forex',   icon: '🇨🇭',
     keywords: ['swiss franc','chf','snb','swiss national bank','jordan snb',
                'switzerland inflation','safe haven currency','chf strengthens',
-               'switzerland gdp','snb rate','swiss economy','switzerland economy',
-               'swiss interest rate','geneva','zurich market','swiss bank'] },
-
-  { key: 'CNY',   symbol: 'CNY',    label: 'USD/CNY',     tab: 'forex',   icon: '🇨🇳',
+               'switzerland gdp','snb rate','swiss economy','swiss interest rate',
+               'geneva','zurich market','swiss bank'] },
+  { key: 'CNY',   label: 'USD/CNY',     tab: 'forex',   icon: '🇨🇳',
     keywords: ['yuan','renminbi','cny','pboc','peoples bank of china',
                'china currency','yuan devaluation','yuan weakens','yuan strengthens',
                'china rate','pboc rate cut','china economy','china gdp',
                'china trade','china exports','offshore yuan','china growth',
-               'beijing economy','shanghai economy','china stimulus',
-               'china monetary policy','china inflation','li qiang economy'] },
-
-  // ── Crypto ─────────────────────────────────────────────────────────────────
-  { key: 'BTC',   symbol: 'BTC',    label: 'Bitcoin',      tab: 'crypto',  icon: '₿',
+               'beijing economy','china stimulus','china monetary policy'] },
+  { key: 'BTC',   label: 'Bitcoin',     tab: 'crypto',  icon: '₿',
     keywords: ['bitcoin','btc','crypto','cryptocurrency','digital asset',
                'bitcoin price','btc rally','btc crash','bitcoin etf','spot btc etf',
                'bitcoin halving','satoshi','lightning network','bitcoin mining',
                'bitcoin adoption','institutional bitcoin','btc futures',
                'blackrock bitcoin','bitcoin regulation','crypto market',
                'crypto crackdown','crypto rally','crypto sell-off'] },
-
-  { key: 'ETH',   symbol: 'ETH',    label: 'Ethereum',     tab: 'crypto',  icon: '⟠',
+  { key: 'ETH',   label: 'Ethereum',    tab: 'crypto',  icon: '⟠',
     keywords: ['ethereum','eth','ether','defi','nft market','smart contract',
                'ethereum price','eth rally','ethereum network','layer 2',
                'ethereum staking','proof of stake','ethereum etf','vitalik',
                'crypto token','altcoin','ethereum upgrade'] },
 ]
 
-// ─── Advanced sentiment engine ────────────────────────────────────────────────
-//
-// Each pattern includes a WEIGHT (1–3) reflecting market impact magnitude.
-// Context-aware: "rate hike" is bearish for gold but bullish for USD —
-// handled by asset-specific overrides in detectAssets().
+// ─── Sentiment engine ──────────────────────────────────────────────────────────
 
 const BULLISH_SIGNALS = [
-  // Strong price action signals  (weight 3)
   { re: /\b(surge|surged|surges|soar|soared|soars|rocket|rocketed|skyrocket|spike|spiked)\b/i,       w: 3 },
   { re: /\b(record high|all.time high|multi.year high|52.week high|historic high)\b/i,                 w: 3 },
   { re: /\b(short squeeze|massive rally|strong rally|explosive rally)\b/i,                             w: 3 },
-  // Moderate bullish signals     (weight 2)
   { re: /\b(rally|rallies|rallied|climb|climbed|climbs|advance|advances|advanced)\b/i,                 w: 2 },
   { re: /\b(rise|rises|rose|gain|gains|gained|rebound|rebounds|rebounded|bounce|bounced)\b/i,          w: 2 },
   { re: /\b(strengthen|strengthened|strengthens|appreciate|appreciated|recovery)\b/i,                  w: 2 },
@@ -144,7 +115,6 @@ const BULLISH_SIGNALS = [
   { re: /\b(safe haven|flight to safety|risk.off buying|demand surge)\b/i,                             w: 2 },
   { re: /\b(etf inflow|institutional buying|central bank buying|reserve accumulation)\b/i,             w: 2 },
   { re: /\b(halving|adoption surge|mainstream adoption|regulatory approval|spot etf approved)\b/i,    w: 2 },
-  // Mild bullish signals          (weight 1)
   { re: /\b(jump|jumped|jumps|boost|boosted|lift|lifts|lifted|tick up|edge up|inch up)\b/i,            w: 1 },
   { re: /\b(stabilise|stabilize|stabilised|floor|bottomed|support level)\b/i,                          w: 1 },
   { re: /\b(positive outlook|bullish|upside|upbeat|optimistic)\b/i,                                    w: 1 },
@@ -152,12 +122,10 @@ const BULLISH_SIGNALS = [
 ]
 
 const BEARISH_SIGNALS = [
-  // Strong bearish signals         (weight 3)
   { re: /\b(crash|crashed|crashes|collapse|collapsed|collapses|plunge|plunged|plunges)\b/i,            w: 3 },
   { re: /\b(record low|all.time low|multi.year low|52.week low|historic low)\b/i,                      w: 3 },
   { re: /\b(bank run|financial crisis|liquidity crisis|default|sovereign default)\b/i,                 w: 3 },
   { re: /\b(war|invasion|invaded|airstrike|nuclear|chemical attack|weapon of mass)\b/i,                w: 3 },
-  // Moderate bearish signals       (weight 2)
   { re: /\b(fall|falls|fell|drop|drops|dropped|decline|declines|declined|tumble|tumbled)\b/i,          w: 2 },
   { re: /\b(slide|slides|slid|sink|sinks|sank|slump|slumped|slumps|plummet|plummeted)\b/i,            w: 2 },
   { re: /\b(rate hike|rate hikes|tightening|hawkish|aggressive hike|supersized hike)\b/i,              w: 2 },
@@ -166,7 +134,6 @@ const BEARISH_SIGNALS = [
   { re: /\b(supply glut|oversupply|inventory build|demand slump|demand collapse)\b/i,                  w: 2 },
   { re: /\b(sell.?off|liquidation|margin call|forced selling|etf outflow|capital flight)\b/i,          w: 2 },
   { re: /\b(exchange hack|exchange collapse|fraud|rug pull|scam|ban crypto|crypto ban)\b/i,            w: 2 },
-  // Mild bearish signals            (weight 1)
   { re: /\b(weak|weakens|weakened|soften|softens|ease lower|retreat|retreats|retreated)\b/i,           w: 1 },
   { re: /\b(concern|concerns|fear|fears|risk|uncertainty|warn|warning|caution)\b/i,                    w: 1 },
   { re: /\b(hawkish|tighten|tightening|higher for longer|elevated rates)\b/i,                          w: 1 },
@@ -174,8 +141,6 @@ const BEARISH_SIGNALS = [
   { re: /\b(inflation surge|inflation spike|inflation accelerates|inflation high)\b/i,                 w: 1 },
 ]
 
-// Asset-specific context overrides: certain macro events affect assets in OPPOSITE directions.
-// e.g. "rate hike" is bearish for gold/equities but bullish for USD.
 const ASSET_CONTEXT = {
   USD:   { bullish_extra: [/\b(rate hike|hawkish|fed hike|strong jobs|nonfarm payroll beat)\b/i],
            bearish_extra: [/\b(rate cut|dovish|fed cut|weak jobs|jobs miss)\b/i] },
@@ -192,8 +157,7 @@ const ASSET_CONTEXT = {
 }
 
 function scoreSentiment(text) {
-  let bull = 0
-  let bear = 0
+  let bull = 0, bear = 0
   for (const sig of BULLISH_SIGNALS) if (sig.re.test(text)) bull += sig.w
   for (const sig of BEARISH_SIGNALS) if (sig.re.test(text)) bear += sig.w
   return { bull, bear }
@@ -201,34 +165,326 @@ function scoreSentiment(text) {
 
 function detectAssets(title, excerpt) {
   const text = `${title} ${excerpt || ''}`.toLowerCase()
-  const full  = `${title} ${excerpt || ''}`   // keep case for context overrides
+  const full  = `${title} ${excerpt || ''}`
   const found = []
-
   for (const asset of ASSETS) {
     if (!asset.keywords.some(kw => text.includes(kw))) continue
-
     let { bull, bear } = scoreSentiment(full)
-
-    // Apply asset-specific context overrides
     const ctx = ASSET_CONTEXT[asset.key]
     if (ctx) {
       for (const re of (ctx.bullish_extra || [])) if (re.test(full)) bull += 2
       for (const re of (ctx.bearish_extra || [])) if (re.test(full)) bear += 2
     }
-
     const dir = bull > bear ? 'bullish' : bear > bull ? 'bearish' : 'neutral'
-    const confidence = Math.abs(bull - bear)   // higher = more certain
-    found.push({ ...asset, dir, bull, bear, confidence })
+    found.push({ ...asset, dir, bull, bear, confidence: Math.abs(bull - bear) })
   }
   return found
 }
 
-// ─── Price formatting ─────────────────────────────────────────────────────────
+// ─── Market sessions ───────────────────────────────────────────────────────────
+
+const SESSIONS = [
+  { name: 'Sydney',   openUTC: 22, closeUTC: 7,  flag: '🇦🇺', color: 'violet', note: 'AUD/NZD active' },
+  { name: 'Tokyo',    openUTC: 0,  closeUTC: 9,  flag: '🇯🇵', color: 'red',    note: 'JPY/AUD active' },
+  { name: 'London',   openUTC: 7,  closeUTC: 16, flag: '🇬🇧', color: 'blue',   note: 'EUR/GBP/CHF active' },
+  { name: 'New York', openUTC: 13, closeUTC: 22, flag: '🇺🇸', color: 'green',  note: 'USD/CAD active' },
+]
+
+function isSessionActive(s, utcH) {
+  if (s.openUTC < s.closeUTC) return utcH >= s.openUTC && utcH < s.closeUTC
+  return utcH >= s.openUTC || utcH < s.closeUTC  // wraps midnight
+}
+
+function minsUntil(targetH, nowH, nowM) {
+  let diff = (targetH - nowH) * 60 - nowM
+  if (diff < 0) diff += 24 * 60
+  return diff
+}
+
+function SessionBar() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const h = now.getUTCHours()
+  const m = now.getUTCMinutes()
+  const londonNY = h >= 13 && h < 16   // peak liquidity overlap
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 bg-[#0d1117] border border-[#21262d] rounded-sm mb-3 text-[0.6rem] font-mono">
+      <span className="text-[#8b949e] uppercase tracking-[0.12em] shrink-0">Sessions</span>
+      {SESSIONS.map(s => {
+        const active = isSessionActive(s, h)
+        const next   = active ? s.closeUTC : s.openUTC
+        const mins   = minsUntil(next, h, m)
+        const hh     = Math.floor(mins / 60)
+        const mm     = mins % 60
+        const eta    = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`
+        return (
+          <div key={s.name} title={s.note}
+            className={`flex items-center gap-1.5 ${active ? 'text-emerald-400' : 'text-[#484f58]'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]' : 'bg-[#30363d]'}`} />
+            <span>{s.flag} {s.name}</span>
+            <span className={`${active ? 'text-emerald-300 font-semibold' : 'text-[#484f58]'}`}>
+              {active ? `OPEN · closes ${eta}` : `CLOSED · opens ${eta}`}
+            </span>
+          </div>
+        )
+      })}
+      {londonNY && (
+        <span className="ml-auto text-amber-400 font-bold tracking-[0.08em] animate-pulse">
+          ⚡ PEAK LIQUIDITY — London/NY Overlap
+        </span>
+      )}
+      <span className="text-[#484f58] shrink-0 tabular-nums">
+        {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')} UTC
+      </span>
+    </div>
+  )
+}
+
+// ─── Market pulse (risk-on / risk-off) ────────────────────────────────────────
+
+function MarketPulse({ prices }) {
+  if (!prices || prices.length < 4) return null
+  const get = key => prices.find(p => p.key === key)
+  const sp  = get('SP500')
+  const gld = get('GOLD')
+  const btc = get('BTC')
+  const oil = get('OIL')
+
+  const up   = prices.filter(p => p.changePercent != null && p.changePercent > 0).length
+  const down = prices.filter(p => p.changePercent != null && p.changePercent < 0).length
+  const total = up + down
+
+  // Classic risk-on: equities up + gold down; risk-off: gold up + equities down
+  let mood = 'mixed'
+  if (sp?.changePercent > 0.4 && gld?.changePercent < -0.2)   mood = 'risk-on'
+  else if (gld?.changePercent > 0.4 && sp?.changePercent < -0.2) mood = 'risk-off'
+  else if (sp?.changePercent > 0.2 && oil?.changePercent > 0.2)  mood = 'risk-on'
+  else if (gld?.changePercent > 0.3 && btc?.changePercent < -1)  mood = 'risk-off'
+
+  const cfg = {
+    'risk-on':  { bg: 'bg-emerald-950/60 border-emerald-800', badge: 'bg-emerald-500 text-white', icon: '📈', label: 'RISK-ON'  },
+    'risk-off': { bg: 'bg-red-950/60 border-red-800',          badge: 'bg-red-500 text-white',     icon: '🛡️', label: 'RISK-OFF' },
+    mixed:      { bg: 'bg-amber-950/40 border-amber-800',      badge: 'bg-amber-500 text-white',   icon: '⚖️', label: 'MIXED'   },
+  }
+  const c = cfg[mood]
+
+  const fmt = (p, key) => {
+    if (!p || p.changePercent == null) return null
+    const sign = p.changePercent >= 0 ? '+' : ''
+    return `${key} ${sign}${p.changePercent.toFixed(2)}%`
+  }
+
+  const signals = [fmt(sp, 'S&P'), fmt(gld, 'Gold'), fmt(btc, 'BTC'), fmt(oil, 'Oil')].filter(Boolean)
+
+  return (
+    <div className={`flex flex-wrap items-center gap-3 px-3 py-2 border rounded-sm mb-3 text-[0.6rem] font-mono ${c.bg}`}>
+      <span className={`text-[0.55rem] font-bold px-2 py-0.5 rounded-sm tracking-[0.14em] ${c.badge}`}>
+        {c.icon} {c.label}
+      </span>
+      <span className="text-[#8b949e]">{up}/{total} assets positive</span>
+      {signals.map((s, i) => (
+        <span key={i} className={s.includes('+') ? 'text-emerald-400' : s.includes('-') ? 'text-red-400' : 'text-[#8b949e]'}>
+          {s}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// ─── Economic calendar ────────────────────────────────────────────────────────
+// High-impact events scheduled for 2025–2026.
+
+const CALENDAR = [
+  // FOMC 2025
+  { d: '2025-03-19', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-05-07', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-06-18', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-07-30', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-09-17', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-10-29', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2025-12-10', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  // NFP 2025
+  { d: '2025-03-07', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-04-04', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-05-02', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-06-06', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-07-03', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-08-01', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-09-05', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-10-03', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-11-07', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2025-12-05', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  // ECB 2025
+  { d: '2025-03-06', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-04-17', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-06-05', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-07-24', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-09-11', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-10-30', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2025-12-18', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  // BOE 2025
+  { d: '2025-03-20', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-05-08', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-06-19', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-08-07', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-09-18', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-11-06', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2025-12-18', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  // BOJ 2025
+  { d: '2025-03-19', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-05-01', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-06-17', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-07-31', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-09-23', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-10-29', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2025-12-19', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  // US CPI 2025
+  { d: '2025-03-12', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-04-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-05-13', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-06-11', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-07-15', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-08-13', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-09-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-10-15', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-11-12', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2025-12-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  // FOMC 2026
+  { d: '2026-01-28', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-03-18', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-04-29', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-06-17', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-07-29', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-09-16', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-10-28', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  { d: '2026-12-09', label: 'FOMC Rate Decision',             currencies: ['USD'], impact: 'high' },
+  // NFP 2026
+  { d: '2026-02-06', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-03-06', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-04-03', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-05-01', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-06-05', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-07-02', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-08-07', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-09-04', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-10-02', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-11-06', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  { d: '2026-12-04', label: 'US Non-Farm Payrolls',           currencies: ['USD'], impact: 'high' },
+  // ECB 2026
+  { d: '2026-01-22', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-03-05', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-04-16', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-06-04', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-07-23', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-09-10', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-10-29', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  { d: '2026-12-17', label: 'ECB Rate Decision',              currencies: ['EUR'], impact: 'high' },
+  // BOE 2026
+  { d: '2026-02-05', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-03-19', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-05-07', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-06-18', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-08-06', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-09-17', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-11-05', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  { d: '2026-12-17', label: 'Bank of England Rate Decision',  currencies: ['GBP'], impact: 'high' },
+  // BOJ 2026
+  { d: '2026-01-24', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-03-19', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-05-01', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-06-18', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-07-30', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-09-17', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-10-29', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  { d: '2026-12-18', label: 'Bank of Japan Rate Decision',    currencies: ['JPY'], impact: 'high' },
+  // US CPI 2026
+  { d: '2026-02-11', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-03-11', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-04-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-05-13', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-06-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-07-15', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-08-12', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-09-10', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-10-14', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-11-11', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+  { d: '2026-12-09', label: 'US CPI Inflation',               currencies: ['USD'], impact: 'high' },
+]
+
+function EconomicCalendar() {
+  const today    = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const in14     = new Date(today); in14.setDate(in14.getDate() + 14)
+  const in14Str  = in14.toISOString().split('T')[0]
+
+  const upcoming = CALENDAR
+    .filter(e => e.d >= todayStr && e.d <= in14Str)
+    .sort((a, b) => a.d.localeCompare(b.d))
+    .slice(0, 8)
+
+  if (!upcoming.length) return null
+
+  const currencyFlag = { USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵', CNY: '🇨🇳', CHF: '🇨🇭' }
+
+  const fmtDate = (str) => {
+    const d = new Date(str + 'T12:00:00Z')
+    return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' })
+  }
+
+  const isToday = (str) => str === todayStr
+  const isTomorrow = (str) => {
+    const t = new Date(today); t.setDate(t.getDate() + 1)
+    return str === t.toISOString().split('T')[0]
+  }
+
+  return (
+    <div className="mb-4 border border-[#21262d] rounded-sm overflow-hidden">
+      <div className="px-3 py-2 bg-[#0d1117] border-b border-[#21262d] flex items-center justify-between">
+        <span className="text-[0.58rem] font-mono uppercase tracking-[0.14em] text-[#8b949e]">
+          📅 Economic Calendar — Next 14 Days
+        </span>
+        <span className="text-[0.52rem] font-mono text-[#484f58]">High-impact events only</span>
+      </div>
+      <div className="divide-y divide-[#21262d]">
+        {upcoming.map((ev, i) => (
+          <div key={i} className={`flex items-center gap-3 px-3 py-2 text-[0.62rem] font-mono
+            ${isToday(ev.d) ? 'bg-amber-950/30' : 'bg-[#0d1117]/40'}`}>
+            {/* Date */}
+            <div className="w-[80px] shrink-0">
+              <span className={`${isToday(ev.d) ? 'text-amber-400 font-bold' : isTomorrow(ev.d) ? 'text-sky-400' : 'text-[#8b949e]'}`}>
+                {isToday(ev.d) ? 'TODAY' : isTomorrow(ev.d) ? 'TOMORROW' : fmtDate(ev.d)}
+              </span>
+            </div>
+            {/* Currency flags */}
+            <div className="flex gap-0.5 shrink-0 w-[36px]">
+              {ev.currencies.map(c => (
+                <span key={c} title={c}>{currencyFlag[c] || c}</span>
+              ))}
+            </div>
+            {/* Event name */}
+            <span className="flex-1 text-[#e6edf3] font-medium">{ev.label}</span>
+            {/* Impact badge */}
+            <span className="shrink-0 text-[0.5rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-red-900/60 text-red-400 border border-red-800/50">
+              HIGH
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Price formatting ──────────────────────────────────────────────────────────
 
 function fmtPrice(price, key, decimals) {
   if (price == null) return '--'
-  if (key === 'BTC') return `$${Math.round(price).toLocaleString('en-US')}`
-  if (key === 'ETH') return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (key === 'BTC')  return `$${Math.round(price).toLocaleString('en-US')}`
+  if (key === 'ETH')  return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   if (key === 'SP500') return price.toLocaleString('en-US', { maximumFractionDigits: 0 })
   if (['EUR','GBP','JPY','CHF','CNY'].includes(key)) return price.toFixed(decimals ?? 4)
   if (['NATGAS','COPPER','SILVER'].includes(key)) return `$${price.toFixed(decimals ?? 3)}`
@@ -241,86 +497,107 @@ function fmtPct(pct) {
   return `${sign}${pct.toFixed(2)}%`
 }
 
-// ─── Watchlist card ───────────────────────────────────────────────────────────
+// ─── Watchlist card ────────────────────────────────────────────────────────────
 
 function WatchlistCard({ asset, priceData }) {
   const { key, label, icon, bullish = 0, bearish = 0, neutral = 0 } = asset
-  const total  = bullish + bearish + neutral
-  const net    = total === 0 ? 'no-data' : bullish > bearish ? 'bullish' : bearish > bullish ? 'bearish' : 'neutral'
+  const total = bullish + bearish + neutral
+  const net   = total === 0 ? 'no-data' : bullish > bearish ? 'bullish' : bearish > bullish ? 'bearish' : 'neutral'
 
   const price  = priceData?.price ?? null
   const pct    = priceData?.changePercent ?? null
-  const change = priceData?.change ?? null
+  const high   = priceData?.high  ?? null
+  const low    = priceData?.low   ?? null
+  const dec    = priceData?.decimals
 
-  const priceDirUp   = pct != null && pct > 0
-  const priceDirDown = pct != null && pct < 0
+  const pctUp   = pct != null && pct > 0
+  const pctDown = pct != null && pct < 0
 
-  // Card border/bg driven by LIVE price direction (more reliable than news sentiment alone)
-  const liveDir = priceDirUp ? 'up' : priceDirDown ? 'down' : 'flat'
-
-  const cardStyle = {
-    up:      'border-emerald-200 bg-emerald-50/70',
-    down:    'border-red-200 bg-red-50/70',
-    flat:    'border-g200 bg-g50',
-    'no-data': 'border-g200 bg-g50',
-  }
+  // Intraday range bar position (0–100%)
+  const rangePct = (high != null && low != null && price != null && high !== low)
+    ? Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100))
+    : null
 
   const sentimentBadge = {
-    bullish:   { cls: 'bg-emerald-500 text-white', label: '▲ BULL' },
-    bearish:   { cls: 'bg-red-500 text-white',     label: '▼ BEAR' },
-    neutral:   { cls: 'bg-amber-400 text-white',   label: '— NEU'  },
-    'no-data': { cls: 'bg-g300 text-white',         label: '· N/A'  },
+    bullish:   { cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-700', label: '▲ BULL' },
+    bearish:   { cls: 'bg-red-500/20 text-red-400 border-red-700',             label: '▼ BEAR' },
+    neutral:   { cls: 'bg-amber-500/20 text-amber-400 border-amber-700',       label: '— NEU'  },
+    'no-data': { cls: 'bg-[#21262d] text-[#484f58] border-[#30363d]',          label: '· N/A'  },
   }
   const badge = sentimentBadge[net]
 
   return (
-    <div className={`flex-shrink-0 w-[130px] sm:w-[142px] border rounded-sm p-2.5 ${cardStyle[price != null ? liveDir : 'flat']}`}>
-      {/* Top row: icon + sentiment badge */}
+    <div className={`flex-shrink-0 w-[138px] border rounded-sm p-2.5 font-mono
+      bg-[#0d1117] transition-colors
+      ${pctUp ? 'border-emerald-800/70' : pctDown ? 'border-red-800/70' : 'border-[#21262d]'}`}>
+
+      {/* Top: icon + sentiment */}
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[1rem] leading-none">{icon}</span>
-        <span className={`text-[0.48rem] font-mono font-bold px-1 py-0.5 rounded-sm leading-tight ${badge.cls}`}>
+        <span className={`text-[0.46rem] font-bold px-1 py-0.5 border rounded-sm leading-tight tracking-[0.1em] ${badge.cls}`}>
           {badge.label}
         </span>
       </div>
 
-      {/* Symbol */}
-      <div className="text-[0.78rem] font-mono font-bold text-ink leading-none mb-0.5">{label}</div>
+      {/* Label */}
+      <div className="text-[0.72rem] font-bold text-[#e6edf3] leading-none mb-1">{label}</div>
 
-      {/* Live price */}
-      <div className={`text-[0.85rem] font-mono font-bold leading-tight tabular-nums ${
-        priceDirUp ? 'text-emerald-700' : priceDirDown ? 'text-red-600' : 'text-ink'
-      }`}>
-        {fmtPrice(price, key, priceData?.decimals)}
+      {/* Price */}
+      <div className={`text-[0.88rem] font-bold leading-tight tabular-nums
+        ${pctUp ? 'text-emerald-400' : pctDown ? 'text-red-400' : 'text-[#e6edf3]'}`}>
+        {fmtPrice(price, key, dec)}
       </div>
 
       {/* % change */}
       {pct != null ? (
-        <div className={`text-[0.6rem] font-mono font-medium leading-tight tabular-nums ${
-          priceDirUp ? 'text-emerald-600' : priceDirDown ? 'text-red-500' : 'text-g400'
-        }`}>
-          {fmtPct(pct)} today
+        <div className={`text-[0.58rem] font-medium leading-tight tabular-nums mt-0.5
+          ${pctUp ? 'text-emerald-500' : pctDown ? 'text-red-500' : 'text-[#8b949e]'}`}>
+          {fmtPct(pct)}
+          <span className="text-[#484f58] ml-1">{priceData?.source === 'stooq' ? 'vs open' : 'vs prev'}</span>
         </div>
       ) : (
-        <div className="text-[0.58rem] font-mono text-g300 leading-tight">price unavailable</div>
+        <div className="text-[0.55rem] text-[#484f58] mt-0.5">price unavailable</div>
       )}
 
-      {/* News signal count */}
+      {/* Intraday high/low range bar */}
+      {rangePct !== null && (
+        <div className="mt-2">
+          <div className="flex justify-between text-[0.44rem] text-[#484f58] mb-0.5 tabular-nums">
+            <span>{fmtPrice(low, key, dec)}</span>
+            <span>{fmtPrice(high, key, dec)}</span>
+          </div>
+          <div className="h-1 bg-[#21262d] rounded-full overflow-hidden relative">
+            <div
+              className={`h-full rounded-full absolute left-0 top-0
+                ${pctUp ? 'bg-emerald-500' : pctDown ? 'bg-red-500' : 'bg-[#8b949e]'}`}
+              style={{ width: `${rangePct}%` }}
+            />
+            {/* Price marker */}
+            <div
+              className="w-0.5 h-full bg-white absolute top-0 opacity-80"
+              style={{ left: `${rangePct}%`, transform: 'translateX(-50%)' }}
+            />
+          </div>
+          <div className="text-[0.42rem] text-[#484f58] text-center mt-0.5">Day range</div>
+        </div>
+      )}
+
+      {/* News signal tally */}
       {total > 0 && (
-        <div className="mt-1 pt-1 border-t border-g200/60 text-[0.52rem] font-mono text-g400 flex gap-1">
-          <span className="text-emerald-600">{bullish}↑</span>
+        <div className="mt-1.5 pt-1 border-t border-[#21262d] text-[0.5rem] flex gap-1">
+          <span className="text-emerald-500">{bullish}↑</span>
           <span className="text-red-500">{bearish}↓</span>
-          <span className="text-g400">{neutral}—</span>
-          <span className="text-g300 ml-auto">news</span>
+          <span className="text-[#484f58]">{neutral}—</span>
+          <span className="text-[#484f58] ml-auto">news</span>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Asset watchlist bar ──────────────────────────────────────────────────────
+// ─── Watchlist bar ─────────────────────────────────────────────────────────────
 
 function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
-  // Aggregate news sentiment per asset
   const tally = {}
   for (const a of ASSETS) tally[a.key] = { ...a, bullish: 0, bearish: 0, neutral: 0 }
   for (const post of posts) {
@@ -329,29 +606,26 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
     }
   }
 
-  // Build price lookup keyed by asset key
   const priceMap = {}
   for (const p of (prices || [])) priceMap[p.key] = p
 
   return (
-    <div className="mb-6">
+    <div className="mb-4">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-        <span className="text-[0.58rem] font-mono uppercase tracking-[0.14em] text-g500">
+        <span className="text-[0.55rem] font-mono uppercase tracking-[0.14em] text-[#8b949e]">
           Live Prices &amp; News Sentiment
         </span>
-        <div className="flex items-center gap-3 text-[0.52rem] font-mono text-g400">
+        <div className="flex items-center gap-3 text-[0.5rem] font-mono text-[#484f58]">
           {pricesUpdated && (
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
               Prices {timeAgo(pricesUpdated)}
             </span>
           )}
-          {lastUpdated && (
-            <span>News {timeAgo(lastUpdated)}</span>
-          )}
+          {lastUpdated && <span>News {timeAgo(lastUpdated)}</span>}
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
         {ASSETS.map(a => (
           <WatchlistCard key={a.key} asset={tally[a.key]} priceData={priceMap[a.key]} />
         ))}
@@ -360,23 +634,21 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
   )
 }
 
-// ─── Inline asset badge on articles ──────────────────────────────────────────
+// ─── Asset badge on articles ───────────────────────────────────────────────────
 
 function AssetBadge({ symbol, dir, confidence }) {
   const c = {
-    bullish: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    bearish: 'bg-red-50 text-red-700 border-red-200',
-    neutral: 'bg-g100 text-g500 border-g200',
+    bullish: 'bg-emerald-950/60 text-emerald-400 border-emerald-800',
+    bearish: 'bg-red-950/60 text-red-400 border-red-800',
+    neutral: 'bg-[#161b22] text-[#8b949e] border-[#30363d]',
   }
   const arrow = { bullish: '▲', bearish: '▼', neutral: '—' }
-  // Show confidence dots: ● = strong, ◉ = medium, ○ = weak
-  const dots = confidence >= 4 ? '●●' : confidence >= 2 ? '●○' : '○○'
+  const dots  = confidence >= 4 ? '●●' : confidence >= 2 ? '●○' : '○○'
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[0.58rem] font-mono font-medium px-1.5 py-0.5 border rounded-sm ${c[dir]}`}
+    <span className={`inline-flex items-center gap-0.5 text-[0.56rem] font-mono font-medium px-1.5 py-0.5 border rounded-sm ${c[dir]}`}
       title={`${arrow[dir]} ${dir} signal (strength: ${dots})`}>
-      <span>{arrow[dir]}</span>
-      <span>{symbol}</span>
-      <span className="opacity-50 text-[0.45rem] ml-0.5">{dots}</span>
+      {arrow[dir]} {symbol}
+      <span className="opacity-40 text-[0.43rem] ml-0.5">{dots}</span>
     </span>
   )
 }
@@ -385,19 +657,22 @@ function AssetBadge({ symbol, dir, confidence }) {
 
 function MarketArticleRow({ post }) {
   const assets = detectAssets(post.title, post.excerpt)
-  // Sort by confidence desc so strongest signals show first
   assets.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
 
+  const isBreaking = post.category === 'breaking-news'
+  const minsAgo    = Math.floor((Date.now() - new Date(post.published_at)) / 60000)
+  const isFresh    = minsAgo <= 30
+
   return (
-    <article className="group border-b border-g200 py-4 sm:py-5 hover:bg-g50 transition-colors duration-150">
-      <div className="flex gap-3 sm:gap-4">
+    <article className="group border-b border-[#21262d] py-3.5 hover:bg-[#161b22]/60 transition-colors duration-150">
+      <div className="flex gap-3">
         {/* Thumbnail */}
         <Link to={`/post/${post.slug}`} className="shrink-0">
-          <div className="w-[88px] h-[58px] sm:w-[120px] sm:h-[78px] bg-g100 overflow-hidden rounded-sm">
+          <div className="w-[82px] h-[54px] sm:w-[112px] sm:h-[74px] bg-[#161b22] overflow-hidden rounded-sm">
             <img
               src={post.cover_image || placeholderImage(post.category)}
               alt={post.title}
-              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
               onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderImage(post.category) }}
               loading="lazy"
             />
@@ -406,30 +681,38 @@ function MarketArticleRow({ post }) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Asset impact badges */}
-          {assets.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-1.5">
-              {assets.slice(0, 5).map(a => (
-                <AssetBadge key={a.key} symbol={a.key} dir={a.dir} confidence={a.confidence} />
-              ))}
-            </div>
-          )}
+          {/* Badges row */}
+          <div className="flex flex-wrap gap-1 mb-1.5 items-center">
+            {isFresh && (
+              <span className="text-[0.46rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-400 border border-amber-700/60 uppercase tracking-[0.1em]">
+                {minsAgo < 5 ? '🔴 JUST NOW' : `${minsAgo}m ago`}
+              </span>
+            )}
+            {isBreaking && (
+              <span className="text-[0.46rem] font-mono font-bold px-1.5 py-0.5 rounded-sm bg-red-500/20 text-red-400 border border-red-700/60 uppercase tracking-[0.1em]">
+                BREAKING
+              </span>
+            )}
+            {assets.slice(0, 4).map(a => (
+              <AssetBadge key={a.key} symbol={a.key} dir={a.dir} confidence={a.confidence} />
+            ))}
+          </div>
 
           <Link to={`/post/${post.slug}`}>
-            <h3 className="font-serif font-bold text-ink text-[0.9rem] sm:text-[1rem] leading-[1.28] line-clamp-2 group-hover:opacity-70 transition-opacity">
+            <h3 className="font-serif font-bold text-[#e6edf3] text-[0.88rem] sm:text-[0.97rem] leading-[1.28] line-clamp-2 group-hover:text-[#c9d1d9] transition-colors">
               {post.title}
             </h3>
           </Link>
 
           {post.excerpt && (
-            <p className="mt-1 text-[0.75rem] sm:text-[0.8rem] font-sans text-g500 line-clamp-1 leading-[1.5] hidden sm:block">
+            <p className="mt-0.5 text-[0.72rem] font-sans text-[#8b949e] line-clamp-1 leading-[1.5] hidden sm:block">
               {post.excerpt}
             </p>
           )}
 
-          <div className="mt-1.5 flex items-center gap-1.5 sm:gap-2 text-[0.62rem] font-mono text-g400 flex-wrap">
-            <span className="font-medium text-g500">{post.source_name || 'YUP'}</span>
-            <span>·</span>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[0.6rem] font-mono text-[#484f58] flex-wrap">
+            {post.source_name && <span className="text-[#8b949e]">{post.source_name}</span>}
+            {post.source_name && <span>·</span>}
             <span>{timeAgo(post.published_at)}</span>
             <span className="hidden sm:inline">·</span>
             <span className="hidden sm:inline">{readingTime(post.content || post.excerpt)}</span>
@@ -449,7 +732,7 @@ function MarketArticleRow({ post }) {
 // ─── Tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'all',     label: 'All Markets',           desc: 'All market-moving news' },
+  { id: 'all',     label: 'All Markets',           desc: 'All recent market news' },
   { id: 'forex',   label: 'Forex',                 desc: 'Currency pairs & central banks' },
   { id: 'futures', label: 'Futures & Commodities', desc: 'Gold, Oil, Silver, Nat Gas & more' },
   { id: 'crypto',  label: 'Crypto',                desc: 'Bitcoin, Ethereum & digital assets' },
@@ -457,8 +740,9 @@ const TABS = [
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-const NEWS_REFRESH_MS  = 5 * 60 * 1000   // articles refresh every 5 min
-const PRICE_REFRESH_MS = 60 * 1000       // prices refresh every 60 s
+const NEWS_REFRESH_MS  = 5 * 60 * 1000
+const PRICE_REFRESH_MS = 60 * 1000
+const PAGE_SIZE = 50   // larger initial fetch → more results per tab filter
 
 export default function Market() {
   const [posts, setPosts]                 = useState([])
@@ -473,17 +757,15 @@ export default function Market() {
   const newsTimer  = useRef(null)
   const priceTimer = useRef(null)
 
-  // ── News loader ─────────────────────────────────────────────────────────────
   const loadNews = useCallback(async (p = 1, append = false) => {
     if (p === 1) setLoading(true)
-    const res = await getMarketPosts({ page: p, pageSize: 20 })
+    const res = await getMarketPosts({ page: p, pageSize: PAGE_SIZE })
     setPosts(prev => append ? [...prev, ...(res.data || [])] : (res.data || []))
     setHasMore(p < (res.totalPages || 1))
     setLastUpdated(new Date())
     setLoading(false)
   }, [])
 
-  // ── Price loader ────────────────────────────────────────────────────────────
   const loadPrices = useCallback(async () => {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/get-market-prices`, {
@@ -495,29 +777,16 @@ export default function Market() {
         setPrices(data.prices)
         setPricesUpdated(new Date())
       }
-    } catch { /* prices unavailable — fail silently */ }
+    } catch { /* fail silently */ }
     finally { setPricesLoading(false) }
   }, [])
 
-  // Initial load
   useEffect(() => {
     loadNews(1)
     loadPrices()
-
-    // Auto-refresh news every 5 min
-    newsTimer.current = setInterval(() => {
-      setPosts([])
-      setPage(1)
-      loadNews(1)
-    }, NEWS_REFRESH_MS)
-
-    // Auto-refresh prices every 60 s
+    newsTimer.current  = setInterval(() => { setPosts([]); setPage(1); loadNews(1) }, NEWS_REFRESH_MS)
     priceTimer.current = setInterval(loadPrices, PRICE_REFRESH_MS)
-
-    return () => {
-      clearInterval(newsTimer.current)
-      clearInterval(priceTimer.current)
-    }
+    return () => { clearInterval(newsTimer.current); clearInterval(priceTimer.current) }
   }, [loadNews, loadPrices])
 
   function loadMore() {
@@ -526,42 +795,42 @@ export default function Market() {
     loadNews(next, true)
   }
 
-  // Tab filter
-  const filtered = posts.filter(post => {
-    const assets = detectAssets(post.title, post.excerpt)
-    if (tab === 'all') return assets.length > 0
-    return assets.some(a => a.tab === tab)
-  })
+  // ── Tab filter ─────────────────────────────────────────────────────────────
+  // "All Markets" shows every post — no keyword gate.
+  // Specific tabs filter by asset tab category.
+  const filtered = tab === 'all'
+    ? posts
+    : posts.filter(post => detectAssets(post.title, post.excerpt).some(a => a.tab === tab))
 
   return (
     <>
       <SEO
-        title="Markets — Live prices & news impact analysis"
-        description="Real-time prices and market news with asset impact analysis for forex, futures and crypto traders. Gold, Oil, BTC, EUR, S&P 500 and more."
+        title="Markets — Live prices & analysis"
+        description="Real-time market prices, session hours, economic calendar and news impact analysis for forex, futures and crypto traders."
         url="/markets"
       />
       <Header />
 
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 py-6 md:py-10">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 py-6 md:py-8">
 
         {/* Page header */}
-        <div className="mb-6 pb-5 border-b border-g200 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="mb-5 pb-4 border-b border-[#21262d] flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h1 className="font-serif font-bold text-2xl sm:text-3xl md:text-4xl text-ink tracking-[-0.02em]">
+            <div className="flex items-center gap-2.5 mb-1">
+              <h1 className="font-serif font-bold text-2xl sm:text-3xl text-[#e6edf3] tracking-[-0.02em]">
                 Markets
               </h1>
-              <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-emerald-600 font-bold border border-emerald-200 bg-emerald-50 px-1.5 py-0.5">
+              <span className="text-[0.55rem] font-mono uppercase tracking-[0.14em] text-emerald-400 font-bold border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 rounded-sm">
                 Live
               </span>
             </div>
-            <p className="text-[0.78rem] sm:text-sm font-sans text-g500">
-              Live prices · asset impact analysis · forex, futures &amp; crypto
+            <p className="text-[0.72rem] font-sans text-[#8b949e]">
+              Live prices · sessions · economic calendar · asset impact analysis
             </p>
           </div>
           <button
             onClick={() => { setPage(1); loadNews(1); loadPrices() }}
-            className="self-start sm:self-auto text-[0.62rem] font-mono text-g400 hover:text-emerald-600 transition-colors flex items-center gap-1.5 border border-g200 px-3 py-1.5 hover:border-emerald-300"
+            className="self-start sm:self-auto text-[0.6rem] font-mono text-[#8b949e] hover:text-emerald-400 transition-colors flex items-center gap-1.5 border border-[#30363d] hover:border-emerald-700 px-3 py-1.5 rounded-sm"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -570,87 +839,91 @@ export default function Market() {
           </button>
         </div>
 
-        {/* Asset Watchlist — always shows all assets with live price */}
+        {/* Session indicator */}
+        <SessionBar />
+
+        {/* Market pulse */}
+        {prices.length > 0 && <MarketPulse prices={prices} />}
+
+        {/* Asset watchlist */}
         {(loading && pricesLoading) ? (
-          <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0 w-[130px] h-[90px] bg-g100 animate-pulse rounded-sm" />
+              <div key={i} className="flex-shrink-0 w-[138px] h-[100px] bg-[#161b22] animate-pulse rounded-sm border border-[#21262d]" />
             ))}
           </div>
         ) : (
-          <AssetWatchlist
-            posts={posts}
-            prices={prices}
-            lastUpdated={lastUpdated}
-            pricesUpdated={pricesUpdated}
-          />
+          <AssetWatchlist posts={posts} prices={prices} lastUpdated={lastUpdated} pricesUpdated={pricesUpdated} />
         )}
 
+        {/* Economic calendar */}
+        <EconomicCalendar />
+
         {/* Tabs */}
-        <div className="flex items-center border-b border-g200 mb-5 overflow-x-auto">
+        <div className="flex items-center border-b border-[#21262d] mb-4 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               title={t.desc}
-              className={`text-[0.68rem] sm:text-[0.72rem] font-mono uppercase tracking-[0.1em] sm:tracking-[0.12em] px-3 sm:px-5 py-3 border-b-2 whitespace-nowrap transition-colors ${
+              className={`text-[0.66rem] sm:text-[0.7rem] font-mono uppercase tracking-[0.1em] px-3 sm:px-5 py-3 border-b-2 whitespace-nowrap transition-colors ${
                 tab === t.id
-                  ? 'border-emerald-600 text-emerald-700 font-medium'
-                  : 'border-transparent text-g500 hover:text-ink hover:bg-g50'
+                  ? 'border-emerald-500 text-emerald-400 font-medium'
+                  : 'border-transparent text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161b22]/50'
               }`}
             >
               {t.label}
             </button>
           ))}
           <div className="flex-1" />
-          {/* Strength legend */}
-          <div className="hidden lg:flex items-center gap-3 text-[0.55rem] font-mono text-g400 px-2 shrink-0 pb-0.5">
-            <span className="flex items-center gap-1"><span className="text-emerald-600 font-bold">▲</span> Bullish</span>
-            <span className="flex items-center gap-1"><span className="text-red-500 font-bold">▼</span> Bearish</span>
-            <span className="flex items-center gap-1"><span className="opacity-60">●●</span> Strong</span>
-            <span className="flex items-center gap-1"><span className="opacity-60">●○</span> Moderate</span>
+          <div className="hidden lg:flex items-center gap-3 text-[0.52rem] font-mono text-[#484f58] px-2 pb-0.5 shrink-0">
+            <span className="flex items-center gap-1"><span className="text-emerald-400">▲</span> Bullish signal</span>
+            <span className="flex items-center gap-1"><span className="text-red-400">▼</span> Bearish signal</span>
+            <span className="flex items-center gap-1"><span className="opacity-60">●●</span> High confidence</span>
           </div>
         </div>
 
         {/* Article list */}
         {loading ? (
-          <div className="space-y-0">
+          <div>
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="animate-pulse flex gap-4 border-b border-g200 py-5">
-                <div className="w-[88px] h-[58px] sm:w-[120px] sm:h-[78px] bg-g100 shrink-0 rounded-sm" />
-                <div className="flex-1 space-y-2">
+              <div key={i} className="animate-pulse flex gap-3 border-b border-[#21262d] py-3.5">
+                <div className="w-[82px] h-[54px] sm:w-[112px] sm:h-[74px] bg-[#161b22] shrink-0 rounded-sm" />
+                <div className="flex-1 space-y-2 py-0.5">
                   <div className="flex gap-1">
-                    <div className="h-4 bg-g100 w-12 rounded-sm" /><div className="h-4 bg-g100 w-10 rounded-sm" />
+                    <div className="h-3.5 bg-[#161b22] w-12 rounded-sm" />
+                    <div className="h-3.5 bg-[#161b22] w-10 rounded-sm" />
                   </div>
-                  <div className="h-4 bg-g100 w-full rounded-sm" />
-                  <div className="h-3 bg-g100 w-3/4 rounded-sm" />
-                  <div className="h-3 bg-g100 w-1/4 rounded-sm" />
+                  <div className="h-4 bg-[#161b22] w-full rounded-sm" />
+                  <div className="h-3 bg-[#161b22] w-3/4 rounded-sm" />
+                  <div className="h-3 bg-[#161b22] w-1/4 rounded-sm" />
                 </div>
               </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-20 text-center">
-            <p className="text-[1.4rem] font-serif text-g400 mb-2">No results</p>
-            <p className="text-sm font-mono text-g400">
+            <p className="text-[1.3rem] font-serif text-[#8b949e] mb-2">No results</p>
+            <p className="text-sm font-mono text-[#484f58]">
               {tab === 'all'
-                ? 'No market-moving news detected yet. Check back in a few minutes.'
+                ? 'No articles loaded yet. Check back in a few minutes.'
                 : `No ${TABS.find(t => t.id === tab)?.label} stories in the current batch.`}
             </p>
           </div>
         ) : (
           <div>
-            <div className="mb-3 text-[0.62rem] font-mono text-g400">
-              {filtered.length} {filtered.length === 1 ? 'story' : 'stories'} with market impact
+            <div className="mb-2 text-[0.58rem] font-mono text-[#484f58]">
+              {filtered.length} {filtered.length === 1 ? 'story' : 'stories'}
+              {tab !== 'all' && ' with market impact'}
             </div>
             {filtered.map(post => (
               <MarketArticleRow key={post.id} post={post} />
             ))}
-            {tab === 'all' && hasMore && (
-              <div className="mt-8 text-center">
+            {hasMore && (
+              <div className="mt-6 text-center">
                 <button
                   onClick={loadMore}
-                  className="px-8 py-2.5 border border-g200 text-[0.75rem] font-mono uppercase tracking-[0.1em] text-g500 hover:border-emerald-500 hover:text-emerald-700 transition-colors"
+                  className="px-8 py-2.5 border border-[#30363d] text-[0.72rem] font-mono uppercase tracking-[0.1em] text-[#8b949e] hover:border-emerald-700 hover:text-emerald-400 transition-colors rounded-sm"
                 >
                   Load more
                 </button>

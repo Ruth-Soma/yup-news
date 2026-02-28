@@ -2,8 +2,8 @@ name: News Crawler
 
 on:
   schedule:
-    # Runs every 30 minutes — keeps content fresh around the clock
-    - cron: '*/30 * * * *'
+    # Runs every 5 minutes — GitHub Actions minimum; maximally fresh content
+    - cron: '*/5 * * * *'
   workflow_dispatch: # allow manual trigger from GitHub Actions UI
 
 jobs:

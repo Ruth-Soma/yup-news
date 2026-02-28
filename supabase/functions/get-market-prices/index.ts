@@ -2,9 +2,10 @@
  * get-market-prices — multi-source market data proxy
  *
  * Sources:
- *   • Yahoo Finance v8/finance/chart  → commodities & indices (per-symbol, no crumb needed)
- *   • Frankfurter.app (no key)        → EUR, GBP, JPY, CHF, CNY forex rates
- *   • CoinGecko free API (no key)     → BTC, ETH
+ *   • Stooq.com (primary, no key)       → OHLCV for commodities & indices (incl. high/low)
+ *   • Yahoo Finance v8/finance/chart    → commodities fallback if Stooq fails
+ *   • Frankfurter.app (no key)          → EUR, GBP, JPY, CHF, CNY forex rates
+ *   • CoinGecko /coins/markets (no key) → BTC, ETH with 24h high/low
  *
  * Called from Market.jsx every 60 s.
  */
@@ -21,20 +22,18 @@ const UA = 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124
 // ─── Asset manifest ────────────────────────────────────────────────────────────
 
 const COMMODITY_ASSETS = [
-  { key: 'GOLD',   symbol: 'GC=F',  label: 'Gold',        tab: 'futures', decimals: 2 },
-  { key: 'SILVER', symbol: 'SI=F',  label: 'Silver',      tab: 'futures', decimals: 3 },
-  { key: 'OIL',    symbol: 'CL=F',  label: 'Crude Oil',   tab: 'futures', decimals: 2 },
-  { key: 'NATGAS', symbol: 'NG=F',  label: 'Natural Gas', tab: 'futures', decimals: 3 },
-  { key: 'COPPER', symbol: 'HG=F',  label: 'Copper',      tab: 'futures', decimals: 3 },
-  { key: 'SP500',  symbol: 'ES=F',  label: 'S&P 500',     tab: 'futures', decimals: 0 },
-  { key: 'WHEAT',  symbol: 'ZW=F',  label: 'Wheat',       tab: 'futures', decimals: 2 },
+  { key: 'GOLD',   symbol: 'GC=F',  stooq: 'gc.f',  label: 'Gold',        tab: 'futures', decimals: 2  },
+  { key: 'SILVER', symbol: 'SI=F',  stooq: 'si.f',  label: 'Silver',      tab: 'futures', decimals: 3  },
+  { key: 'OIL',    symbol: 'CL=F',  stooq: 'cl.f',  label: 'Crude Oil',   tab: 'futures', decimals: 2  },
+  { key: 'NATGAS', symbol: 'NG=F',  stooq: 'ng.f',  label: 'Natural Gas', tab: 'futures', decimals: 3  },
+  { key: 'COPPER', symbol: 'HG=F',  stooq: 'hg.f',  label: 'Copper',      tab: 'futures', decimals: 3  },
+  { key: 'SP500',  symbol: 'ES=F',  stooq: 'es.f',  label: 'S&P 500',     tab: 'futures', decimals: 0  },
+  { key: 'WHEAT',  symbol: 'ZW=F',  stooq: 'zw.f',  label: 'Wheat',       tab: 'futures', decimals: 2  },
 ]
 
 const FOREX_ASSETS = [
-  // pair: "EUR/USD" → base=EUR from=EUR to=USD
   { key: 'EUR', from: 'EUR', to: 'USD', label: 'EUR/USD', tab: 'forex', decimals: 4 },
   { key: 'GBP', from: 'GBP', to: 'USD', label: 'GBP/USD', tab: 'forex', decimals: 4 },
-  // pair: "USD/JPY" → base=USD from=USD to=JPY  (keep as-is)
   { key: 'JPY', from: 'USD', to: 'JPY', label: 'USD/JPY', tab: 'forex', decimals: 2 },
   { key: 'CHF', from: 'USD', to: 'CHF', label: 'USD/CHF', tab: 'forex', decimals: 4 },
   { key: 'CNY', from: 'USD', to: 'CNY', label: 'USD/CNY', tab: 'forex', decimals: 4 },
@@ -45,13 +44,61 @@ const CRYPTO_ASSETS = [
   { key: 'ETH', cgId: 'ethereum', label: 'Ethereum', tab: 'crypto', decimals: 2 },
 ]
 
-// ─── Yahoo Finance v8/finance/chart (per-symbol, no crumb) ────────────────────
-// This endpoint returns OHLCV + meta prices and does NOT require crumb auth,
-// unlike the v7/finance/quote bulk endpoint.
+// ─── Stooq CSV (primary for commodities — free, no auth, includes OHLCV) ─────
+// URL: https://stooq.com/q/l/?s=gc.f&f=sd2t2ohlcv&h&e=csv
+// CSV columns: Symbol, Date, Time, Open, High, Low, Close, Volume
+// Change % uses today's Open as proxy for previous close (intraday move)
 
-async function fetchYahooChart(
-  asset: { key: string; symbol: string; label: string; tab: string; decimals: number }
-): Promise<any> {
+async function fetchStooq(asset: { key: string; stooq: string; label: string; tab: string; decimals: number }): Promise<any> {
+  try {
+    const url = `https://stooq.com/q/l/?s=${asset.stooq}&f=sd2t2ohlcv&h&e=csv`
+    const r = await fetch(url, {
+      headers: { 'User-Agent': UA, 'Accept': 'text/csv,text/plain,*/*' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return null
+
+    const text = await r.text()
+    const lines = text.trim().split('\n')
+    if (lines.length < 2) return null
+
+    const row = lines[1].split(',')
+    if (row.length < 7) return null
+
+    const open  = parseFloat(row[3])
+    const high  = parseFloat(row[4])
+    const low   = parseFloat(row[5])
+    const close = parseFloat(row[6])
+
+    // Stooq returns 'N/A' or 0 when the market has no data
+    if (!close || isNaN(close) || close === 0) return null
+
+    const change    = !isNaN(open) && open ? close - open : null
+    const changePct = !isNaN(open) && open ? ((close - open) / open) * 100 : null
+
+    return {
+      key: asset.key,
+      label: asset.label,
+      tab: asset.tab,
+      decimals: asset.decimals,
+      price:  close,
+      open:   !isNaN(open)  ? open  : null,
+      high:   !isNaN(high)  ? high  : null,
+      low:    !isNaN(low)   ? low   : null,
+      change,
+      changePercent: changePct,
+      currency: 'USD',
+      marketState: 'REGULAR',
+      source: 'stooq',
+    }
+  } catch {
+    return null
+  }
+}
+
+// ─── Yahoo Finance v8/finance/chart (fallback for commodities) ────────────────
+
+async function fetchYahooChart(asset: { key: string; symbol: string; label: string; tab: string; decimals: number }): Promise<any> {
   try {
     const url =
       `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}` +
@@ -64,19 +111,23 @@ async function fetchYahooChart(
         'Accept-Language': 'en-US,en;q=0.5',
         'Referer': `https://finance.yahoo.com/quote/${asset.symbol}/`,
         'Origin': 'https://finance.yahoo.com',
+        'Cache-Control': 'no-cache',
       },
       signal: AbortSignal.timeout(6000),
     })
     if (!r.ok) return null
 
-    const data = await r.json()
-    const meta = data?.chart?.result?.[0]?.meta
+    const data   = await r.json()
+    const meta   = data?.chart?.result?.[0]?.meta
     if (!meta?.regularMarketPrice) return null
 
-    const price      = meta.regularMarketPrice as number
-    const prevClose  = (meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPreviousClose) as number | undefined
-    const change     = prevClose != null ? price - prevClose : null
-    const changePct  = prevClose != null ? ((price - prevClose) / prevClose) * 100 : null
+    const price     = meta.regularMarketPrice as number
+    const prevClose = (meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPreviousClose) as number | undefined
+    const high      = meta.regularMarketDayHigh as number | undefined
+    const low       = meta.regularMarketDayLow  as number | undefined
+    const open      = meta.regularMarketOpen    as number | undefined
+    const change    = prevClose != null ? price - prevClose : null
+    const changePct = prevClose != null ? ((price - prevClose) / prevClose) * 100 : null
 
     return {
       key: asset.key,
@@ -84,6 +135,9 @@ async function fetchYahooChart(
       tab: asset.tab,
       decimals: asset.decimals,
       price,
+      open:  open  ?? null,
+      high:  high  ?? null,
+      low:   low   ?? null,
       change,
       changePercent: changePct,
       currency: (meta.currency as string) || 'USD',
@@ -95,19 +149,14 @@ async function fetchYahooChart(
   }
 }
 
-// ─── Frankfurter.app for forex ────────────────────────────────────────────────
-// Fetch each pair correctly: EUR/USD = GET /latest?from=EUR&to=USD
-// USD/JPY = GET /latest?from=USD&to=JPY  (rate is already USD/JPY)
+// ─── Frankfurter.app for forex (ECB reference rates, yesterday for % change) ──
 
-async function fetchForexPair(
-  asset: { key: string; from: string; to: string; label: string; tab: string; decimals: number }
-): Promise<any> {
+async function fetchForexPair(asset: { key: string; from: string; to: string; label: string; tab: string; decimals: number }): Promise<any> {
   try {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     const yDate = yesterday.toISOString().split('T')[0]
 
-    // Fetch today + yesterday in parallel for change %
     const [todayRes, yestRes] = await Promise.allSettled([
       fetch(`https://api.frankfurter.app/latest?from=${asset.from}&to=${asset.to}`, { signal: AbortSignal.timeout(5000) }),
       fetch(`https://api.frankfurter.app/${yDate}?from=${asset.from}&to=${asset.to}`, { signal: AbortSignal.timeout(5000) }),
@@ -134,6 +183,9 @@ async function fetchForexPair(
       tab: asset.tab,
       decimals: asset.decimals,
       price,
+      open: null,
+      high: null,
+      low:  null,
       change,
       changePercent: changePct,
       currency: 'USD',
@@ -145,16 +197,21 @@ async function fetchForexPair(
   }
 }
 
-// ─── CoinGecko for crypto ─────────────────────────────────────────────────────
+// ─── CoinGecko /coins/markets — price + 24h high/low + change% in one call ───
 
-async function fetchCryptoPrices(): Promise<Record<string, any>> {
-  const ids = CRYPTO_ASSETS.map(a => a.cgId).join(',')
-  const r = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
-    { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) }
-  )
-  if (!r.ok) return {}
-  return await r.json()
+async function fetchCryptoPrices(): Promise<any[]> {
+  try {
+    const ids = CRYPTO_ASSETS.map(a => a.cgId).join(',')
+    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
+    const r = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return []
+    return await r.json()
+  } catch {
+    return []
+  }
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -163,56 +220,75 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    // All requests fire in parallel
-    const [commodityResults, forexResults, cryptoData] = await Promise.all([
-      Promise.allSettled(COMMODITY_ASSETS.map(fetchYahooChart)),
+    // All sources fire in parallel for minimum latency
+    const [commodityResults, forexResults, cryptoMarkets] = await Promise.all([
+      // Commodities: Stooq primary → Yahoo fallback
+      Promise.allSettled(
+        COMMODITY_ASSETS.map(async (asset) => {
+          const stooq = await fetchStooq(asset)
+          if (stooq) return stooq
+          return fetchYahooChart(asset)
+        })
+      ),
       Promise.allSettled(FOREX_ASSETS.map(fetchForexPair)),
-      fetchCryptoPrices().catch(() => ({} as Record<string, any>)),
+      fetchCryptoPrices(),
     ])
 
     const prices: any[] = []
-    const sources = { yahoo: 0, frankfurter: 0, coingecko: 0, unavailable: 0 }
+    const sources = { stooq: 0, yahoo: 0, frankfurter: 0, coingecko: 0, unavailable: 0 }
 
-    // Commodities (Yahoo Finance v8 chart)
+    // Commodities
     for (let i = 0; i < COMMODITY_ASSETS.length; i++) {
-      const res = commodityResults[i]
+      const res   = commodityResults[i]
       const asset = COMMODITY_ASSETS[i]
       if (res.status === 'fulfilled' && res.value) {
         prices.push(res.value)
-        sources.yahoo++
+        const src = res.value.source as keyof typeof sources
+        if (src in sources) sources[src]++
       } else {
-        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
+        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, open: null, high: null, low: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
         sources.unavailable++
       }
     }
 
-    // Forex (Frankfurter)
+    // Forex
     for (let i = 0; i < FOREX_ASSETS.length; i++) {
-      const res = forexResults[i]
+      const res   = forexResults[i]
       const asset = FOREX_ASSETS[i]
       if (res.status === 'fulfilled' && res.value) {
         prices.push(res.value)
         sources.frankfurter++
       } else {
-        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
+        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, open: null, high: null, low: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
         sources.unavailable++
       }
     }
 
-    // Crypto (CoinGecko)
+    // Crypto — build lookup by CoinGecko ID
+    const cgMap: Record<string, any> = {}
+    for (const row of cryptoMarkets) if (row?.id) cgMap[row.id] = row
+
     for (const asset of CRYPTO_ASSETS) {
-      const cg = cryptoData[asset.cgId]
-      if (cg?.usd != null) {
+      const cg = cgMap[asset.cgId]
+      if (cg?.current_price != null) {
         prices.push({
-          key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals,
-          price: cg.usd,
-          change: null,
-          changePercent: cg.usd_24h_change ?? null,
-          currency: 'USD', marketState: 'REGULAR', source: 'coingecko',
+          key: asset.key,
+          label: asset.label,
+          tab: asset.tab,
+          decimals: asset.decimals,
+          price: cg.current_price,
+          open:  null,
+          high:  cg.high_24h  ?? null,
+          low:   cg.low_24h   ?? null,
+          change:        cg.price_change_24h                ?? null,
+          changePercent: cg.price_change_percentage_24h     ?? null,
+          currency: 'USD',
+          marketState: 'REGULAR',
+          source: 'coingecko',
         })
         sources.coingecko++
       } else {
-        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
+        prices.push({ key: asset.key, label: asset.label, tab: asset.tab, decimals: asset.decimals, price: null, open: null, high: null, low: null, change: null, changePercent: null, currency: 'USD', source: 'unavailable' })
         sources.unavailable++
       }
     }

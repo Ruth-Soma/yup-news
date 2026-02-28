@@ -15,9 +15,9 @@ serve(async (req: Request) => {
   let newPostsCount = 0
   let skippedCount = 0
   let aiCallsThisRun = 0
-  const MAX_AI_CALLS = 8       // 8 articles per run × 48 runs/day = ~380 posts/day max
+  const MAX_AI_CALLS = 4       // 4 articles per run × 288 runs/day = ~1150 posts/day max; deduplication keeps actual output much lower
   const ITEMS_PER_FEED = 10   // keep memory footprint low
-  const RUN_BUDGET_MS = 120_000 // hard stop at 120 s to stay within 150 s Edge Function limit
+  const RUN_BUDGET_MS = 45_000 // hard stop at 45 s — safe for 5-min cron interval
   const runStart = Date.now()
 
   try {
