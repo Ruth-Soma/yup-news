@@ -13,9 +13,20 @@ export default function SEO({
   article,
   breadcrumbs,
   isHomepage = false,
+  pagination, // { page, totalPages, baseUrl } — for paginated category/search pages
 }) {
   const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — Breaking News`
-  const canonical = url ? `${SITE_URL}${url}` : SITE_URL
+
+  // Helper: append ?page=N or &page=N depending on whether URL already has params
+  const withPage = (base, p) => {
+    if (!p || p <= 1) return base
+    return base.includes('?') ? `${base}&page=${p}` : `${base}?page=${p}`
+  }
+
+  // Paginated pages get a page-specific canonical; page 1 uses the clean URL
+  const canonical = pagination && pagination.page > 1
+    ? `${SITE_URL}${withPage(url, pagination.page)}`
+    : url ? `${SITE_URL}${url}` : SITE_URL
   const ogImage = image || DEFAULT_IMAGE
 
   // BreadcrumbList JSON-LD — shows breadcrumb trail in Google results
@@ -91,6 +102,14 @@ export default function SEO({
       <title>{fullTitle}</title>
       {description && <meta name="description" content={description} />}
       <link rel="canonical" href={canonical} />
+
+      {/* rel=prev / rel=next for paginated lists — helps Google understand pagination */}
+      {pagination && pagination.page > 1 && (
+        <link rel="prev" href={`${SITE_URL}${withPage(url, pagination.page - 1)}`} />
+      )}
+      {pagination && pagination.page < pagination.totalPages && (
+        <link rel="next" href={`${SITE_URL}${withPage(url, pagination.page + 1)}`} />
+      )}
 
       {/* Tell Google to use full snippets and large image previews — critical for CTR */}
       <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />

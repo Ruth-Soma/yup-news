@@ -5,7 +5,7 @@ import Footer from '@/components/layout/Footer'
 import ArticleCard from '@/components/blog/ArticleCard'
 import SEO from '@/components/ui/SEO'
 import { usePosts } from '@/hooks/usePosts'
-import { timeAgo, placeholderImage, flagEmoji } from '@/lib/utils'
+import { timeAgo, placeholderImage, flagEmoji, countryInfoFromPost } from '@/lib/utils'
 
 // Hero card for the first (featured) article in the category
 function HeroCard({ post }) {
@@ -29,14 +29,17 @@ function HeroCard({ post }) {
           <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g400">
             {post.category?.replace(/-/g, ' ')}
           </span>
-          {post.country && (
-            <>
-              <span className="text-g300">·</span>
-              <span className="text-[0.6rem] font-mono text-g500 flex items-center gap-1">
-                {flagEmoji(post.country_code)}{post.country}
-              </span>
-            </>
-          )}
+          {(() => {
+            const ci = countryInfoFromPost(post)
+            return ci ? (
+              <>
+                <span className="text-g300">·</span>
+                <span className="text-[0.6rem] font-mono text-g500 flex items-center gap-1">
+                  {ci.code && flagEmoji(ci.code)} {ci.name}
+                </span>
+              </>
+            ) : null
+          })()}
           <span className="text-g300">·</span>
           <span className="text-[0.6rem] font-mono text-g400">{timeAgo(post.published_at)}</span>
         </div>
@@ -59,7 +62,7 @@ function HeroCard({ post }) {
 export default function Category() {
   const { slug } = useParams()
   const [page, setPage] = useState(1)
-  const { posts, loading, loadingMore, totalPages, count } = usePosts({ page, category: slug, append: true })
+  const { posts, loading, loadingMore, error, totalPages, count } = usePosts({ page, category: slug, append: true })
   const title = slug?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
   const hero = posts[0]
@@ -75,6 +78,7 @@ export default function Category() {
           { name: 'Home', url: '/' },
           { name: title, url: `/category/${slug}` },
         ]}
+        pagination={totalPages > 1 ? { page, totalPages, baseUrl: `/category/${slug}` } : undefined}
       />
       <Header />
 
@@ -101,7 +105,12 @@ export default function Category() {
         </div>
 
         {/* Post list */}
-        {loading ? (
+        {error ? (
+          <div className="py-24 text-center">
+            <p className="font-serif text-2xl text-g500">Failed to load stories.</p>
+            <p className="mt-2 text-[0.82rem] font-sans text-g500">Please check your connection and refresh the page.</p>
+          </div>
+        ) : loading ? (
           <div>
             {/* Hero skeleton */}
             <div className="animate-pulse border border-g200 mb-6">

@@ -13,24 +13,33 @@ export default function Search() {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState(null)
   const [count, setCount] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const prevQuery = useRef(query)
 
   useEffect(() => {
-    if (!query) { setResults([]); setCount(0); return }
+    if (!query) { setResults([]); setCount(0); setError(null); return }
     const queryChanged = prevQuery.current !== query
     prevQuery.current = query
     const shouldReplace = queryChanged || page === 1
 
-    if (shouldReplace) { setLoading(true); setResults([]) }
+    if (shouldReplace) { setLoading(true); setResults([]); setError(null) }
     else setLoadingMore(true)
 
-    searchPosts(query, { page }).then(({ data, count, totalPages }) => {
-      if (shouldReplace) setResults(data || [])
-      else setResults(prev => [...prev, ...(data || [])])
-      setCount(count || 0)
-      setTotalPages(totalPages)
+    searchPosts(query, { page }).then(({ data, count, totalPages, error }) => {
+      if (error) {
+        setError(error.message || 'Search failed')
+      } else {
+        if (shouldReplace) setResults(data || [])
+        else setResults(prev => [...prev, ...(data || [])])
+        setCount(count || 0)
+        setTotalPages(totalPages)
+      }
+      setLoading(false)
+      setLoadingMore(false)
+    }).catch(err => {
+      setError(err.message || 'Search failed')
       setLoading(false)
       setLoadingMore(false)
     })
@@ -41,7 +50,12 @@ export default function Search() {
 
   return (
     <>
-      <SEO title={`Search: ${query}`} description={`Search results for "${query}" on YUP`} />
+      <SEO
+        title={`Search: ${query}`}
+        description={`Search results for "${query}" on YUP`}
+        url={query ? `/search?q=${encodeURIComponent(query)}` : '/search'}
+        pagination={query && totalPages > 1 ? { page, totalPages, baseUrl: `/search?q=${encodeURIComponent(query)}` } : undefined}
+      />
       <Header />
 
       <main className="px-6 md:px-12 max-w-[1200px] mx-auto">
@@ -64,7 +78,12 @@ export default function Search() {
         </div>
 
         {/* Results */}
-        {loading ? (
+        {error ? (
+          <div className="py-24 text-center">
+            <p className="font-serif text-2xl text-g500">Search unavailable.</p>
+            <p className="mt-2 text-[0.82rem] font-sans text-g500">Please check your connection and try again.</p>
+          </div>
+        ) : loading ? (
           <div className="py-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="animate-pulse py-6 border-b border-g200">

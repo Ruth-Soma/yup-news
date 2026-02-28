@@ -367,7 +367,7 @@ export default function Home() {
   const hotFeed  = useHotPosts({ page: region ? 1 : page })
   const filteredFeed = usePosts({ page, region, append: true })
   const activeFeed = region ? filteredFeed : hotFeed
-  const { posts, loading, loadingMore, totalPages } = activeFeed
+  const { posts, loading, loadingMore, error, totalPages } = activeFeed
   const { candidates } = useFeaturedPosts()
   const sentinelRef = useRef(null)
 
@@ -471,8 +471,16 @@ export default function Home() {
           )}
         </div>
 
+        {/* Error state */}
+        {error && !loading && (
+          <div className="py-16 text-center border-t border-g200">
+            <p className="font-serif text-xl text-g500">Couldn't load stories right now.</p>
+            <p className="mt-2 text-[0.82rem] font-sans text-g500">Please check your connection and refresh the page.</p>
+          </div>
+        )}
+
         {/* Latest Stories */}
-        {!loading && (
+        {!loading && !error && (
           <>
             <SectionRow label="Latest Stories" linkTo="/" linkLabel="View all" />
             <div className="grid grid-cols-1 md:grid-cols-3 divide-x divide-g200 mb-0">

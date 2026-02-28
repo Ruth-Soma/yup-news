@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /preview/
 
 # Primary sitemap (all published articles + static pages)
 Sitemap: https://yup.ng/sitemap.xml

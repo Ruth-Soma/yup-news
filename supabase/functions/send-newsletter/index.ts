@@ -81,7 +81,9 @@ serve(async (req: Request) => {
 
       await Promise.allSettled(
         batch.map(async (sub) => {
-          const unsubscribeUrl = `${SITE_URL}/unsubscribe?token=${sub.unsubscribe_token}`
+          const unsubscribeUrl = sub.unsubscribe_token
+            ? `${SITE_URL}/unsubscribe?token=${sub.unsubscribe_token}`
+            : `${SITE_URL}/unsubscribe`
           const html = newsletterEmail({ posts, date, unsubscribeUrl })
 
           const form = new FormData()
