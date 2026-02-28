@@ -15,8 +15,8 @@ serve(async (req: Request) => {
   let newPostsCount = 0
   let skippedCount = 0
   let aiCallsThisRun = 0
-  const MAX_AI_CALLS = 3
-  const ITEMS_PER_FEED = 6
+  const MAX_AI_CALLS = 6
+  const ITEMS_PER_FEED = 10
 
   try {
     // 1. Fetch active feeds
@@ -54,8 +54,10 @@ serve(async (req: Request) => {
       })
     )
 
-    // 4. Collect candidate items, dedup by slug + similarity
-    const candidates: Array<{ feed: any; item: RSSItem; slug: string }> = []
+    // 4. Collect ALL candidates — dedup only against already-published posts (not within-run)
+    //    Within-run similar stories are SIGNALS of trending topics, not duplicates.
+    interface Candidate { feed: any; item: RSSItem; slug: string }
+    const allCandidates: Candidate[] = []
     for (const result of feedResults) {
       if (result.status !== 'fulfilled') continue
       const { feed, items } = result.value
@@ -63,42 +65,84 @@ serve(async (req: Request) => {
         if (!item.title || item.title.length < 10) continue
         const slug = generateSlug(item.title)
         if (seenSlugs.has(slug)) { skippedCount++; continue }
-        if (isTooSimilar(item.title, seenTitles)) {
-          logs.push(`Skipped similar: ${item.title.substring(0, 55)}`)
-          skippedCount++
-          continue
-        }
-        candidates.push({ feed, item, slug })
-        // Pre-add slug to avoid within-run slug conflicts
-        seenSlugs.add(slug)
+        // Skip only if we've already PUBLISHED something very similar
+        if (isTooSimilar(item.title, seenTitles)) { skippedCount++; continue }
+        if ((item.description?.length || 0) < 60) { skippedCount++; continue }
+        allCandidates.push({ feed, item, slug })
       }
     }
 
-    logs.push(`${candidates.length} candidates after dedup (${skippedCount} skipped)`)
+    logs.push(`${allCandidates.length} raw candidates (${skippedCount} skipped as already-covered)`)
 
-    // 5. Score and sort candidates — best stories first
-    function qualityScore(item: RSSItem): number {
-      let score = 0
-      // Reward longer, meatier descriptions
-      score += Math.min(item.description?.length || 0, 600) / 60      // 0–10 pts
-      // Reward having an image
+    // 5. Detect trending: count how many other candidates share similar keywords.
+    //    If 3 sources all post about "Iran attack Israel", that's breaking news — boost it.
+    const trendBonus: number[] = new Array(allCandidates.length).fill(0)
+    for (let i = 0; i < allCandidates.length; i++) {
+      const kwA = titleKeywords(allCandidates[i].item.title)
+      if (kwA.size < 2) continue
+      for (let j = i + 1; j < allCandidates.length; j++) {
+        const kwB = titleKeywords(allCandidates[j].item.title)
+        let overlap = 0
+        for (const w of kwA) if (kwB.has(w)) overlap++
+        if (overlap / Math.min(kwA.size, kwB.size) >= 0.4) {
+          trendBonus[i] += 4   // each additional source covering same story = +4 pts
+          trendBonus[j] += 4
+        }
+      }
+    }
+
+    // 6. Score every candidate
+    const BREAKING_WORDS = /\b(breaking|urgent|alert|attack|attacked|killed|kills|bombing|bomb|explosion|exploded|war|invasion|invaded|crisis|emergency|crash|earthquake|hurricane|tsunami|coup|assassination|assassinated|hostage|missile|strike|airstrike|shooting|shooting|death toll|casualties|escalat)\b/i
+    const TIER1_SOURCES = new Set(['BBC News World','Reuters','AP News','CNN','Al Jazeera','NPR News','Deutsche Welle','Sky News','France 24'])
+
+    function qualityScore(item: RSSItem, feed: any, bonus: number): number {
+      let score = bonus  // trending bonus from cross-source frequency
+
+      // Recency: newer = more important for breaking news
+      const ageMs = item.pubDate ? Date.now() - item.pubDate : null
+      if (ageMs !== null) {
+        if (ageMs < 60 * 60 * 1000)       score += 10  // < 1 hour
+        else if (ageMs < 3 * 60 * 60 * 1000)  score += 7   // < 3 hours
+        else if (ageMs < 6 * 60 * 60 * 1000)  score += 4   // < 6 hours
+        else if (ageMs < 12 * 60 * 60 * 1000) score += 2   // < 12 hours
+        else if (ageMs > 48 * 60 * 60 * 1000) score -= 4   // > 48 hours old
+      }
+
+      // Breaking news keyword signal
+      if (BREAKING_WORDS.test(item.title)) score += 8
+
+      // Tier-1 source bonus
+      if (TIER1_SOURCES.has(feed.name)) score += 3
+
+      // Content richness
+      score += Math.min(item.description?.length || 0, 600) / 60  // 0–10 pts
       if (item.image) score += 3
-      // Reward longer, specific titles (not vague clickbait stubs)
       const titleWords = item.title.split(/\s+/).length
       if (titleWords >= 8) score += 2
       if (titleWords >= 12) score += 1
-      // Penalise very short descriptions (likely stub / ad / promo)
+
+      // Penalties
       if ((item.description?.length || 0) < 80) score -= 5
-      // Penalise titles that look like section headers or promos
-      if (/^(watch|video|photos?|gallery|quiz|sponsored|advertisement)/i.test(item.title)) score -= 8
+      if (/^(watch|video|photos?|gallery|quiz|sponsored|advertisement)/i.test(item.title)) score -= 10
       return score
     }
 
-    const ranked = candidates
-      .filter(({ item }) => (item.description?.length || 0) >= 60)   // hard minimum
-      .sort((a, b) => qualityScore(b.item) - qualityScore(a.item))
+    // 7. Sort all candidates by score, then dedup within run (keep best per topic cluster)
+    const scored = allCandidates
+      .map((c, i) => ({ ...c, score: qualityScore(c.item, c.feed, trendBonus[i]) }))
+      .sort((a, b) => b.score - a.score)
 
-    logs.push(`${ranked.length} quality candidates after scoring`)
+    // Pick best candidate per topic cluster (avoid re-writing same story twice)
+    const ranked: typeof scored = []
+    const usedInRun: string[] = []
+    for (const candidate of scored) {
+      if (isTooSimilar(candidate.item.title, usedInRun)) continue
+      ranked.push(candidate)
+      usedInRun.push(candidate.item.title)
+      seenSlugs.add(candidate.slug)
+    }
+
+    logs.push(`${ranked.length} ranked candidates — top: ${ranked[0]?.item.title.substring(0, 55) || 'none'}`)
 
     // 6. Pre-fetch full article content for top candidates in parallel
     const topCandidates = ranked.slice(0, MAX_AI_CALLS)
@@ -360,19 +404,28 @@ Return this exact JSON:
 
 // ─── RSS PARSER ───────────────────────────────────────────────────────────────
 
-interface RSSItem { title: string; description: string; link: string; image: string | null }
+interface RSSItem { title: string; description: string; link: string; image: string | null; pubDate: number | null }
+
+function parsePubDate(xml: string): number | null {
+  const raw = extractTag(xml, 'pubDate') || extractTag(xml, 'published') || extractTag(xml, 'dc:date') || extractTag(xml, 'updated')
+  if (!raw) return null
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? null : d.getTime()
+}
 
 function parseRSS(xml: string): RSSItem[] {
   const items: RSSItem[] = []
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g
+  // Handle both <item> (RSS) and <entry> (Atom) feeds
+  const itemRegex = /(<item>[\s\S]*?<\/item>|<entry>[\s\S]*?<\/entry>)/g
   let match
   while ((match = itemRegex.exec(xml)) !== null) {
     const item = match[1]
     items.push({
       title: cleanText(extractTag(item, 'title')),
-      description: cleanText(extractTag(item, 'description')),
+      description: cleanText(extractTag(item, 'description') || extractTag(item, 'summary') || extractTag(item, 'content')),
       link: extractTag(item, 'link') || extractTag(item, 'guid'),
       image: extractImage(item),
+      pubDate: parsePubDate(item),
     })
   }
   return items.filter(i => i.title.length > 0)
