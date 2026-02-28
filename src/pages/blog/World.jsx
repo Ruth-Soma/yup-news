@@ -7,25 +7,27 @@ import { getPosts, getPopularPosts } from '@/lib/queries'
 import { timeAgo, placeholderImage } from '@/lib/utils'
 
 const REGION_LABEL = {
-  us: 'United States',
-  china: 'China',
-  africa: 'Africa',
-  asia: 'Asia',
-  europe: 'Europe',
-  americas: 'Americas',
-  oceania: 'Oceania',
-  global: 'World',
+  us:            'United States',
+  china:         'China',
+  africa:        'Africa',
+  antarctica:    'Antarctica',
+  asia:          'Asia',
+  europe:        'Europe',
+  oceania:       'Australia / Oceania',
+  americas:      'Americas',
+  'north-america': 'North America',
+  'south-america': 'South America',
+  global:        'World',
 }
 
 const CONTINENTS = [
-  { value: 'us', label: 'United States' },
-  { value: 'china', label: 'China' },
-  { value: 'africa', label: 'Africa' },
-  { value: 'asia', label: 'Asia' },
-  { value: 'europe', label: 'Europe' },
-  { value: 'americas', label: 'Americas' },
-  { value: 'oceania', label: 'Oceania' },
-  { value: 'global', label: 'World' },
+  { value: 'africa',        label: 'Africa' },
+  { value: 'antarctica',    label: 'Antarctica' },
+  { value: 'asia',          label: 'Asia' },
+  { value: 'oceania',       label: 'Australia / Oceania' },
+  { value: 'europe',        label: 'Europe' },
+  { value: 'north-america', label: 'North America' },
+  { value: 'south-america', label: 'South America' },
 ]
 
 // ─── Popular card ────────────────────────────────────────────────────────────

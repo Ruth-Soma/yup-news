@@ -7,14 +7,17 @@ import SEO from '@/components/ui/SEO'
 import { usePosts } from '@/hooks/usePosts'
 
 const REGION_LABELS = {
-  us: 'United States',
-  china: 'China',
-  africa: 'Africa',
-  asia: 'Asia',
-  europe: 'Europe',
-  americas: 'Americas',
-  oceania: 'Oceania',
-  global: 'World',
+  us:            'United States',
+  china:         'China',
+  africa:        'Africa',
+  antarctica:    'Antarctica',
+  asia:          'Asia',
+  europe:        'Europe',
+  oceania:       'Australia / Oceania',
+  americas:      'Americas',
+  'north-america': 'North America',
+  'south-america': 'South America',
+  global:        'World',
 }
 
 export default function Region() {

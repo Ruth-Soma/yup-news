@@ -51,14 +51,13 @@ export default function Footer() {
           </div>
           <ul className="flex flex-col gap-2">
             {[
-              { to: '/region/us', label: 'United States' },
-              { to: '/region/china', label: 'China' },
-              { to: '/region/africa', label: 'Africa' },
-              { to: '/region/asia', label: 'Asia' },
-              { to: '/region/europe', label: 'Europe' },
-              { to: '/region/americas', label: 'Americas' },
-              { to: '/region/oceania', label: 'Oceania' },
-              { to: '/region/global', label: 'World' },
+              { to: '/region/africa',        label: 'Africa' },
+              { to: '/region/antarctica',    label: 'Antarctica' },
+              { to: '/region/asia',          label: 'Asia' },
+              { to: '/region/oceania',       label: 'Australia / Oceania' },
+              { to: '/region/europe',        label: 'Europe' },
+              { to: '/region/north-america', label: 'North America' },
+              { to: '/region/south-america', label: 'South America' },
             ].map(r => (
               <li key={r.label}>
                 <Link to={r.to} className="text-[0.82rem] text-white/55 hover:text-white transition-colors">

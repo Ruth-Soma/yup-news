@@ -57,15 +57,17 @@ export function placeholderImage(category = '') {
 }
 
 export const REGIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'us', label: 'United States' },
-  { value: 'china', label: 'China' },
-  { value: 'africa', label: 'Africa' },
-  { value: 'asia', label: 'Asia' },
-  { value: 'europe', label: 'Europe' },
-  { value: 'americas', label: 'Americas' },
-  { value: 'oceania', label: 'Oceania' },
-  { value: 'global', label: 'World' },
+  { value: 'all',           label: 'All' },
+  { value: 'us',            label: 'United States' },
+  { value: 'china',         label: 'China' },
+  { value: 'africa',        label: 'Africa' },
+  { value: 'antarctica',    label: 'Antarctica' },
+  { value: 'asia',          label: 'Asia' },
+  { value: 'oceania',       label: 'Australia / Oceania' },
+  { value: 'europe',        label: 'Europe' },
+  { value: 'north-america', label: 'North America' },
+  { value: 'south-america', label: 'South America' },
+  { value: 'global',        label: 'World' },
 ]
 
 export const CATEGORIES = [
