@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 import StatsCard from '@/components/admin/StatsCard'
-import { getDashboardStats, getTopPostsByViews, getViewsOverTime, getViewsByCountry } from '@/lib/queries'
+import { getDashboardStats, getTopPostsByViews, getViewsOverTime, getViewsByCountry, getVisitorIPs } from '@/lib/queries'
 import { format, subDays } from 'date-fns'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [topPosts, setTopPosts] = useState([])
   const [viewsData, setViewsData] = useState([])
   const [locationData, setLocationData] = useState([])
+  const [visitorIPs, setVisitorIPs] = useState([])
   const [loading, setLoading] = useState(true)
   const [newsletterStatus, setNewsletterStatus] = useState('idle') // idle | sending | done | error
   const [newsletterMsg, setNewsletterMsg] = useState('')
@@ -26,7 +27,8 @@ export default function Dashboard() {
       getTopPostsByViews(),
       getViewsOverTime(),
       getViewsByCountry(30),
-    ]).then(([statsRes, topRes, viewsRes, locRes]) => {
+      getVisitorIPs(100),
+    ]).then(([statsRes, topRes, viewsRes, locRes, ipsRes]) => {
       setStats(statsRes)
       setTopPosts(topRes.data || [])
 
@@ -42,6 +44,7 @@ export default function Dashboard() {
       })
       setViewsData(days)
       setLocationData(locRes.data || [])
+      setVisitorIPs(ipsRes.data || [])
       setLoading(false)
     })
   }, [])
@@ -201,6 +204,60 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Visitor IPs */}
+      <div className="bg-paper border border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-serif font-bold text-lg text-ink">Visitor IPs</h3>
+          <span className="text-xs font-mono text-muted">Recent 100 unique IPs · deduplicated</span>
+        </div>
+        {visitorIPs.length === 0 ? (
+          <p className="text-xs font-mono text-muted py-6 text-center px-5">
+            {loading ? 'Loading…' : 'No IP data yet — will populate as visitors arrive (new views only).'}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="border-b border-border bg-g100 text-left">
+                  <th className="px-5 py-2 font-medium text-muted">#</th>
+                  <th className="px-5 py-2 font-medium text-muted">IP Address</th>
+                  <th className="px-5 py-2 font-medium text-muted">Country</th>
+                  <th className="px-5 py-2 font-medium text-muted">Views</th>
+                  <th className="px-5 py-2 font-medium text-muted">Last Seen</th>
+                  <th className="px-5 py-2 font-medium text-muted hidden md:table-cell">Last Article</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visitorIPs.map((row, i) => (
+                  <tr key={row.ip_address + i} className="hover:bg-g50 transition-colors">
+                    <td className="px-5 py-2.5 text-muted">{i + 1}</td>
+                    <td className="px-5 py-2.5 text-ink font-medium">{row.ip_address}</td>
+                    <td className="px-5 py-2.5 text-muted">
+                      {row.country_code && row.country_code !== 'XX' ? (
+                        <span>{row.country || row.country_code}</span>
+                      ) : (
+                        <span className="text-g300">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 text-ink">{Number(row.view_count).toLocaleString()}</td>
+                    <td className="px-5 py-2.5 text-muted">
+                      {row.last_seen
+                        ? new Date(row.last_seen).toLocaleString('en-GB', {
+                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                          })
+                        : '—'}
+                    </td>
+                    <td className="px-5 py-2.5 text-muted hidden md:table-cell max-w-[200px] truncate">
+                      {row.sample_title || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

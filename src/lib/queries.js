@@ -173,16 +173,32 @@ export async function searchPosts(query, { category, region, page = 1 } = {}) {
 }
 
 export async function incrementPostViews(postId, country = null, countryCode = null) {
-  await supabase.from('page_views').insert({
-    post_id: postId,
-    country: country || null,
-    country_code: countryCode || null,
-  })
-  await supabase.rpc('increment_views', { post_id: postId })
+  // Server-side: captures real IP, deduplicates within 30 min, stores country + user_agent
+  try {
+    const sessionId = (() => {
+      try {
+        let id = localStorage.getItem('yup_session_id')
+        if (!id) { id = crypto.randomUUID(); localStorage.setItem('yup_session_id', id) }
+        return id
+      } catch { return null }
+    })()
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+    const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
+    fetch(`${SUPABASE_URL}/functions/v1/log-view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON}` },
+      body: JSON.stringify({ post_id: postId, session_id: sessionId, country, country_code: countryCode }),
+    }).catch(() => {})
+  } catch { /* never block page load */ }
 }
 
 export async function getViewsByCountry(daysBack = 30) {
   const { data, error } = await supabase.rpc('get_views_by_country', { days_back: daysBack })
+  return { data: data || [], error }
+}
+
+export async function getVisitorIPs(limitRows = 100) {
+  const { data, error } = await supabase.rpc('get_visitor_ips', { limit_rows: limitRows })
   return { data: data || [], error }
 }
 
