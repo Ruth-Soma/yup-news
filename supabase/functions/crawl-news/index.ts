@@ -84,6 +84,7 @@ serve(async (req: Request) => {
 
     // 5. Detect trending: count how many other candidates share similar keywords.
     //    If 3 sources all post about "Iran attack Israel", that's breaking news — boost it.
+    //    IMPORTANT: cap at +16 so one dominant story cannot monopolise all 8 output slots.
     const trendBonus: number[] = new Array(allCandidates.length).fill(0)
     for (let i = 0; i < allCandidates.length; i++) {
       const kwA = titleKeywords(allCandidates[i].item.title)
@@ -97,6 +98,11 @@ serve(async (req: Request) => {
           trendBonus[j] += 4
         }
       }
+    }
+    // Hard cap: no story earns more than +16 trend bonus (= 4 corroborating sources)
+    // Without this, a single conflict story can score 80+ and fill every output slot.
+    for (let i = 0; i < trendBonus.length; i++) {
+      trendBonus[i] = Math.min(trendBonus[i], 16)
     }
 
     // 6. Score every candidate
@@ -140,14 +146,46 @@ serve(async (req: Request) => {
       .map((c, i) => ({ ...c, score: qualityScore(c.item, c.feed, trendBonus[i]) }))
       .sort((a, b) => b.score - a.score)
 
-    // Pick best candidate per topic cluster (avoid re-writing same story twice)
+    // Pick best candidate per topic cluster with diversity controls:
+    //   - Skip near-duplicate titles (isTooSimilar)
+    //   - Max 2 articles from the same RSS feed source
+    //   - Max 2 articles that prominently feature the same named entity (Iran, Russia, Trump…)
+    // This prevents a single conflict/event from filling all 8 output slots.
+    function extractProminentEntities(title: string): string[] {
+      const words = title.split(/\s+/)
+      const entities: string[] = []
+      for (let i = 1; i < words.length; i++) {
+        const w = words[i].replace(/[^a-zA-Z]/g, '')
+        if (w.length > 3 && /^[A-Z]/.test(w) && !STOP_WORDS.has(w.toLowerCase())) {
+          entities.push(w.toLowerCase())
+        }
+      }
+      return entities.slice(0, 3)  // top 3 proper-noun entities per title
+    }
+
     const ranked: typeof scored = []
     const usedInRun: string[] = []
+    const entityCounts: Record<string, number> = {}
+    const sourceCounts: Record<string, number> = {}
+    const MAX_PER_ENTITY = 2  // e.g., max 2 "Iran" articles
+    const MAX_PER_SOURCE = 2  // max 2 articles from same RSS feed
+
     for (const candidate of scored) {
       if (isTooSimilar(candidate.item.title, usedInRun)) continue
+
+      // Source diversity
+      const srcId = String(candidate.feed.id)
+      if ((sourceCounts[srcId] || 0) >= MAX_PER_SOURCE) continue
+
+      // Entity diversity — skip if any prominent entity is already at its cap
+      const entities = extractProminentEntities(candidate.item.title)
+      if (entities.length > 0 && entities.some(e => (entityCounts[e] || 0) >= MAX_PER_ENTITY)) continue
+
       ranked.push(candidate)
       usedInRun.push(candidate.item.title)
       seenSlugs.add(candidate.slug)
+      sourceCounts[srcId] = (sourceCounts[srcId] || 0) + 1
+      for (const e of entities) entityCounts[e] = (entityCounts[e] || 0) + 1
     }
 
     logs.push(`${ranked.length} ranked candidates — top: ${ranked[0]?.item.title.substring(0, 55) || 'none'}`)
@@ -193,7 +231,8 @@ serve(async (req: Request) => {
       if (pexelsKey && timeLeft > 25_000) {
         enrichedContent = await injectInlineImages(
           enrichedContent, aiResult.title || item.title,
-          aiResult.image_query || '', feed.category || 'world', pexelsKey, logs
+          aiResult.image_query || '', feed.category || 'world', pexelsKey, logs,
+          coverImage  // seed so cover image is never duplicated inside the body
         )
       }
 
@@ -508,17 +547,21 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[], u
     const data = await res.json()
     const photos: any[] = data.photos || []
     if (!photos.length) return null
-    // Pick from top results, skipping already-used URLs to avoid duplicates in same article
-    const candidates = photos.slice(0, Math.min(photos.length, 10))
+    // Randomise the starting index within the top 5 results so:
+    //   (a) the same post-type doesn't always get the same cover photo, and
+    //   (b) inline images can pick a different photo than the cover even for the same query
+    const pool = photos.slice(0, Math.min(photos.length, 10))
+    const startIdx = Math.floor(Math.random() * Math.min(5, pool.length))
+    const candidates = [...pool.slice(startIdx), ...pool.slice(0, startIdx)]
     for (const photo of candidates) {
       const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
       if (!url) continue
       if (usedUrls && usedUrls.has(url)) continue
-        logs.push(`Pexels: ${url.substring(0, 60)}`)
+      logs.push(`Pexels: ${url.substring(0, 60)}`)
       return url
     }
-    // All top results used — just return the first one
-    const fallback = candidates[0]?.src?.large2x || candidates[0]?.src?.large || null
+    // All candidates exhausted — return the first available
+    const fallback = pool[0]?.src?.large2x || pool[0]?.src?.large || null
     return fallback
   } catch (e: any) {
     logs.push(`Pexels error: ${e.message}`)
@@ -659,10 +702,10 @@ function buildSecondaryQuery(title: string, imageQuery: string, index: number): 
   const titleWords = title.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)
     .filter(w => w.length > 4 && !STOP.has(w))
 
-  // First inline image: use the primary image_query
-  if (index === 0) return imageQuery
-
-  // Second inline image: use different title keywords (offset by 2)
+  // Always use title-derived keywords for inline images — never the same AI query used for cover.
+  // index 0: first 3 significant title words (visually different angle from the cover)
+  // index 1: next 3 significant title words (even more distinct)
+  if (index === 0) return titleWords.slice(0, 3).join(' ') || imageQuery
   return titleWords.slice(2, 5).join(' ') || imageQuery
 }
 
@@ -672,7 +715,8 @@ async function injectInlineImages(
   imageQuery: string,
   category: string,
   pexelsKey: string,
-  logs: string[]
+  logs: string[],
+  seedUrl?: string | null   // cover image URL — must never reappear inside the body
 ): Promise<string> {
   // Split content at <h2> boundaries
   const sections = html.split(/(?=<h2[\s>])/i)
@@ -681,6 +725,7 @@ async function injectInlineImages(
   // Inject one image after section 1 (after first h2 content), one after section 3 if it exists
   const injectPoints = [1, 3].filter(i => i < sections.length)
   const usedUrls = new Set<string>()
+  if (seedUrl) usedUrls.add(seedUrl)  // never reuse the featured cover image
 
   for (let j = 0; j < injectPoints.length; j++) {
     const idx = injectPoints[j]
