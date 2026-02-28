@@ -163,16 +163,16 @@ serve(async (req: Request) => {
       const aiResult = await rewriteWithAI(item.title, sourceText, logs)
       if (!aiResult) continue
 
-      // Image: RSS image → Pexels keyword search → loremflickr fallback
+      // Image: always prefer Pexels (reliable, high-quality) → RSS image fallback
+      // Never use loremflickr — it returns black/blank images unpredictably
       const pexelsKey = Deno.env.get('PEXELS_API_KEY')
-      let coverImage: string | null = item.image || null
-      if (!coverImage && aiResult.image_query) {
-        if (pexelsKey) {
-          coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
-        }
+      let coverImage: string | null = null
+      if (pexelsKey && aiResult.image_query) {
+        coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
       }
-      if (!coverImage) {
-        coverImage = buildFallbackImage(aiResult.image_query, slug)
+      // Only fall back to RSS image if Pexels failed and the URL is from a trusted image host
+      if (!coverImage && item.image && isTrustedImageHost(item.image)) {
+        coverImage = item.image
       }
 
       // Enrich article content: embed YouTube videos + inject inline Pexels images
@@ -515,9 +515,34 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[], u
   }
 }
 
-function buildFallbackImage(imageQuery: string | undefined, slug: string): string | null {
-  if (!imageQuery) return null
-  return `https://loremflickr.com/800/450/${encodeURIComponent(imageQuery.trim())}?lock=${slugToLock(slug)}`
+// Domains that reliably serve hotlink-friendly, good-quality images
+const TRUSTED_IMAGE_HOSTS = [
+  'images.pexels.com',
+  'i.guim.co.uk',           // Guardian (full-size only — width=140 filtered below)
+  'media.guim.co.uk',
+  'ichef.bbci.co.uk',       // BBC
+  'static.reuters.com',
+  'cloudfront-us-east-2.images.arcpublishing.com',
+  'res.cloudinary.com',
+  'upload.wikimedia.org',
+  'cdn.pixabay.com',
+  'images.unsplash.com',
+  'live-production.wcms.abc-cdn.net.au',
+  'foreignpolicy.com',
+  'gdb.voanews.com',
+  'apnews.brightspotcdn.com',
+  'dims.apnews.com',
+  'cdn.cnn.com',
+  's.abcnews.com',
+]
+
+function isTrustedImageHost(url: string): boolean {
+  try {
+    const { hostname, search } = new URL(url)
+    // Reject tiny Guardian thumbnails (width=140 = 3KB stub)
+    if (search.includes('width=140')) return false
+    return TRUSTED_IMAGE_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h))
+  } catch { return false }
 }
 
 // ─── YOUTUBE SEARCH ───────────────────────────────────────────────────────────
