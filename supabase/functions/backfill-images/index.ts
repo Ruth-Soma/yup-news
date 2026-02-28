@@ -29,7 +29,7 @@ serve(async (req: Request) => {
     .from('posts')
     .select('id, title, category, tags, country')
     .eq('status', 'published')
-    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%')
+    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%,cover_image.like.%thehill.com%,cover_image.like.%tbstat.com%,cover_image.like.%width=140%')
     .order('published_at', { ascending: false })
     .limit(limit)
 
@@ -73,7 +73,7 @@ serve(async (req: Request) => {
     .from('posts')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'published')
-    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%')
+    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%,cover_image.like.%thehill.com%,cover_image.like.%tbstat.com%,cover_image.like.%width=140%')
 
   return json({ done: (remaining || 0) === 0, updated, failed, remaining: remaining || 0, logs }, 200)
 })

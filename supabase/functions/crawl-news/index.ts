@@ -380,6 +380,9 @@ const BLOCKED_IMAGE_DOMAINS = [
   'wsj.com',
   'bloomberg.com',
   'www.bloomberg.com',
+  'thehill.com',
+  'www.thehill.com',
+  'www.tbstat.com',
 ]
 
 function isBlockedImage(url: string): boolean {
