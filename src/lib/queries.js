@@ -83,26 +83,32 @@ export async function getFeaturedCandidates(topCategory) {
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
   const SELECT = 'id, title, slug, excerpt, cover_image, category, region, source_name, views, published_at'
 
-  const [breakingRes, relatedRes, worldRes] = await Promise.all([
-    // 1. Breaking news in the last 6 hours
+  const [breakingRes, relatedRes, freshRes, worldRes] = await Promise.all([
+    // 1. Breaking news in the last 6 hours — up to 4 candidates
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('category', 'breaking-news')
-      .gte('published_at', sixHoursAgo).order('published_at', { ascending: false }).limit(2),
-    // 2. Most popular from user's top interest category
+      .gte('published_at', sixHoursAgo).order('published_at', { ascending: false }).limit(4),
+    // 2. Top posts from user's interest category — up to 5 candidates
     topCategory
       ? supabase.from('posts').select(SELECT)
           .eq('status', 'published').eq('category', topCategory)
-          .order('views', { ascending: false }).order('published_at', { ascending: false }).limit(1)
+          .order('views', { ascending: false }).order('published_at', { ascending: false }).limit(5)
       : Promise.resolve({ data: [] }),
-    // 3. Most popular world post
+    // 3. Fresh recent posts (any non-breaking category) — up to 8 candidates
+    supabase.from('posts').select(SELECT)
+      .eq('status', 'published')
+      .neq('category', 'breaking-news')
+      .order('published_at', { ascending: false }).limit(8),
+    // 4. Most popular world posts — up to 4 candidates
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('region', 'global')
-      .order('views', { ascending: false }).limit(1),
+      .order('views', { ascending: false }).limit(4),
   ])
 
   return {
     breaking: breakingRes.data || [],
     related: relatedRes.data || [],
+    fresh: freshRes.data || [],
     world: worldRes.data || [],
   }
 }

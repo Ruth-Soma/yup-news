@@ -9,6 +9,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Try Resend first, then Mailgun US, then Mailgun EU
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  const resendKey = Deno.env.get('RESEND_API_KEY')
+  const mailgunKey = Deno.env.get('MAILGUN_API_KEY')
+
+  if (resendKey) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'YUP News <newsletter@yup.ng>', to, subject, html }),
+    })
+    if (res.ok) return
+    console.warn('Resend failed:', await res.text())
+  }
+
+  if (mailgunKey) {
+    for (const base of ['https://api.mailgun.net', 'https://api.eu.mailgun.net']) {
+      const form = new FormData()
+      form.append('from', 'YUP News <newsletter@yup.ng>')
+      form.append('to', to)
+      form.append('subject', subject)
+      form.append('html', html)
+      const res = await fetch(`${base}/v3/mg.yup.ng/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
+        body: form,
+      })
+      if (res.ok) return
+      console.warn(`Mailgun ${base} failed:`, await res.text())
+    }
+  }
+
+  throw new Error('All email delivery methods failed.')
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -64,32 +99,14 @@ serve(async (req: Request) => {
     if (insertError) throw insertError
 
     const verifyLink = `${SITE_URL}/subscribed?token=${pending.verify_token}&email=${encodeURIComponent(normalised)}`
-
-    // Send email via Mailgun
-    const mailgunKey = Deno.env.get('MAILGUN_API_KEY')
-    if (!mailgunKey) return json({ error: 'Email delivery is not configured yet. Please contact the site administrator.' }, 503)
-
-    const form = new FormData()
-    form.append('from', 'YUP News <newsletter@yup.ng>')
-    form.append('to', normalised)
-    form.append('subject', `${otp} — confirm your YUP subscription`)
-    form.append('html', otpEmail({
+    const html = otpEmail({
       otp,
       heading: 'Confirm your subscription',
       subheading: 'Enter the code below to start receiving your daily YUP briefing.',
       note: `Or skip the code and <a href="${verifyLink}" style="color:#555;text-decoration:underline;">click here to confirm with one tap</a>. If you didn't request this, you can safely ignore this email.`,
-    }))
-
-    const emailRes = await fetch('https://api.mailgun.net/v3/mg.yup.ng/messages', {
-      method: 'POST',
-      headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
-      body: form,
     })
 
-    if (!emailRes.ok) {
-      const err = await emailRes.text()
-      throw new Error(`Email send failed: ${err}`)
-    }
+    await sendEmail(normalised, `${otp} — confirm your YUP subscription`, html)
 
     return json({ success: true, pending_id: pending.id }, 200)
 
