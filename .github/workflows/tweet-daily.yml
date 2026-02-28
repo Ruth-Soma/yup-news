@@ -1,0 +1,24 @@
+name: Daily Breaking News Tweet
+
+on:
+  schedule:
+    # 9:00 AM UTC = 10:00 AM Nigeria (WAT) — peak morning engagement
+    - cron: '0 9 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub Actions UI
+
+jobs:
+  tweet:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post top breaking-news article to Twitter via Late
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/tweet-daily-breaking")
+          cat /tmp/response.json
+          if [ "$response" -ne 200 ]; then
+            echo "Tweet workflow failed with HTTP $response"
+            exit 1
+          fi
