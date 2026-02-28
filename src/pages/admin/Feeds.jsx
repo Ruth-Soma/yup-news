@@ -47,24 +47,21 @@ export default function Feeds() {
 
   async function runCrawl() {
     setCrawling(true)
-    setCrawlMsg('')
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/crawl-news`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON}` },
-        body: JSON.stringify({}),
+    setCrawlMsg('Crawl started — fetching & processing articles (1–2 min)...')
+    // Fire the crawl without blocking — it takes 1-2 min and would timeout otherwise
+    fetch(`${SUPABASE_URL}/functions/v1/crawl-news`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON}` },
+      body: JSON.stringify({}),
+    })
+      .then(r => r.json())
+      .then(data => {
+        const n = data.new_posts ?? 0
+        setCrawlMsg(`Done — ${n} new post${n !== 1 ? 's' : ''} added`)
+        fetchFeeds()
       })
-      const data = await res.json()
-      if (data.newPosts !== undefined) {
-        setCrawlMsg(`Done — ${data.newPosts} new post${data.newPosts !== 1 ? 's' : ''} added`)
-        fetchFeeds() // refresh last_fetched timestamps
-      } else {
-        setCrawlMsg(data.error || 'Crawl triggered')
-      }
-    } catch {
-      setCrawlMsg('Network error')
-    }
-    setCrawling(false)
+      .catch(() => setCrawlMsg('Crawl running in background — check posts in a moment'))
+      .finally(() => setCrawling(false))
   }
 
   async function handleAddFeed(e) {
