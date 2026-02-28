@@ -87,7 +87,9 @@ serve(async (req: Request) => {
       if (aiCallsThisRun > 0) await new Promise(r => setTimeout(r, 4500))
       aiCallsThisRun++
 
-      const aiResult = await rewriteWithAI(item.title, item.description || item.title, logs)
+      const fullContent = await fetchFullContent(item.link, logs)
+      const sourceText = fullContent || item.description || item.title
+      const aiResult = await rewriteWithAI(item.title, sourceText, logs)
       if (!aiResult) continue
 
       // Image: RSS → loremflickr (skip slow AI image gen during bulk fill)
@@ -168,27 +170,90 @@ function isTooSimilar(newTitle: string, existingTitles: string[]): boolean {
   return false
 }
 
+// ─── FULL ARTICLE FETCHER ─────────────────────────────────────────────────────
+
+async function fetchFullContent(url: string, logs: string[]): Promise<string> {
+  if (!url) return ''
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(7000),
+    })
+    if (!res.ok) return ''
+    const html = await res.text()
+
+    // Strip noisy elements
+    const stripped = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<header[\s\S]*?<\/header>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/<aside[\s\S]*?<\/aside>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+
+    // Try to isolate the article body
+    const bodyMatch =
+      stripped.match(/<article[^>]*>([\s\S]*?)<\/article>/i) ||
+      stripped.match(/<main[^>]*>([\s\S]*?)<\/main>/i) ||
+      stripped.match(/<div[^>]*class="[^"]*(?:article|story|post|content|entry)[^"]*"[^>]*>([\s\S]{500,}?)<\/div>/i)
+
+    const body = bodyMatch ? bodyMatch[1] : stripped
+
+    // Extract paragraph text
+    const paragraphs: string[] = []
+    const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi
+    let m
+    while ((m = pRegex.exec(body)) !== null) {
+      const t = cleanText(m[1])
+      if (t.length > 40) paragraphs.push(t)
+    }
+
+    const text = paragraphs.join(' ').trim()
+    if (text.length > 200) {
+      logs.push(`Fetched ${text.length} chars from ${url.substring(0, 50)}`)
+      return text.substring(0, 4000)
+    }
+    return ''
+  } catch {
+    return ''
+  }
+}
+
 // ─── AI REWRITER ──────────────────────────────────────────────────────────────
 
 async function rewriteWithAI(title: string, description: string, logs: string[]) {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) { logs.push('GEMINI_API_KEY not set'); return null }
 
-  const prompt = `You are a senior editor at a digital news publication. Rewrite the following story and return ONLY valid JSON with no extra text.
+  const prompt = `You are a senior editor at a digital news publication. Using the source material below, write a complete, well-researched news article and return ONLY valid JSON with no extra text.
 
 Title: ${title}
-Summary: ${description.substring(0, 500)}
+Source material: ${description.substring(0, 4000)}
 
 Rules for the headline ("title"):
 - Make it punchy, specific, and irresistible to click
 - Include the most important keyword near the start
 - Max 70 characters, no clickbait lies, no invented facts
 
+Rules for "content":
+- Write 550-750 words of clean, engaging journalism
+- Use <p>, <h2>, and <h3> tags only — no lists, no divs
+- Open with a strong lede paragraph that answers who/what/when/where/why
+- Follow with 3-4 <h2> sections that develop the story with context, analysis, and quotes where available
+- End with a forward-looking paragraph on implications or next steps
+- Paraphrase the source material — do not copy sentences verbatim
+- Stay strictly factual; do not invent quotes or statistics not present in the source
+
 Return this exact JSON:
 {
   "title": "Catchy keyword-rich headline (max 70 chars)",
   "excerpt": "2-sentence hook that makes readers want to continue (max 160 chars)",
-  "content": "HTML article body 180-250 words using <p> and <h2> tags only. Tight and factual.",
+  "content": "Full HTML article body 550-750 words using <p>, <h2>, <h3> tags",
   "seo_title": "Primary keyword + topic, max 60 chars",
   "seo_description": "Compelling meta description with keyword, max 155 chars",
   "tags": ["tag1", "tag2", "tag3"],
@@ -203,7 +268,7 @@ Return this exact JSON:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 4096, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.65, maxOutputTokens: 8192, responseMimeType: 'application/json' },
         }),
         signal: AbortSignal.timeout(20000),
       }
