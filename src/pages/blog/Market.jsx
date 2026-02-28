@@ -655,8 +655,33 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
   const priceMap = {}
   for (const p of (prices || [])) priceMap[p.key] = p
 
+  const scrollRef  = useRef(null)
+  const [canLeft,  setCanLeft]  = useState(false)
+  const [canRight, setCanRight] = useState(true)
+
+  const syncArrows = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    syncArrows()
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(syncArrows)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [syncArrows, prices])
+
+  const nudge = (dir) => {
+    scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' })
+  }
+
   return (
     <div className="mb-5">
+      {/* Header */}
       <div className="flex items-center justify-between mb-2.5 flex-wrap gap-1">
         <span className="text-[0.6rem] font-mono uppercase tracking-[0.14em] text-g500">
           Live Prices &amp; News Sentiment
@@ -671,11 +696,80 @@ function AssetWatchlist({ posts, prices, lastUpdated, pricesUpdated }) {
           {lastUpdated && <span>News {timeAgo(lastUpdated)}</span>}
         </div>
       </div>
-      <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
-        {ASSETS.map(a => (
-          <WatchlistCard key={a.key} asset={tally[a.key]} priceData={priceMap[a.key]} />
-        ))}
+
+      {/* Scroller */}
+      <div className="relative">
+        {/* Left gradient fade */}
+        <div className={`absolute left-0 top-0 bottom-3 w-14 bg-gradient-to-r from-paper to-transparent z-10 pointer-events-none transition-opacity duration-200 ${canLeft ? 'opacity-100' : 'opacity-0'}`} />
+        {/* Right gradient fade */}
+        <div className={`absolute right-0 top-0 bottom-3 w-14 bg-gradient-to-l from-paper to-transparent z-10 pointer-events-none transition-opacity duration-200 ${canRight ? 'opacity-100' : 'opacity-0'}`} />
+
+        {/* Left arrow */}
+        <button
+          onClick={() => nudge(-1)}
+          aria-label="Scroll left"
+          className={`absolute left-0 top-1/2 -translate-y-5 z-20 w-7 h-7 flex items-center justify-center bg-paper border border-g200 rounded-full shadow-sm hover:border-g400 hover:shadow-md transition-all duration-150 ${canLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-g500">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+
+        {/* Right arrow */}
+        <button
+          onClick={() => nudge(1)}
+          aria-label="Scroll right"
+          className={`absolute right-0 top-1/2 -translate-y-5 z-20 w-7 h-7 flex items-center justify-center bg-paper border border-g200 rounded-full shadow-sm hover:border-g400 hover:shadow-md transition-all duration-150 ${canRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-g500">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+
+        {/* Cards row — native scrollbar hidden */}
+        <div
+          ref={scrollRef}
+          onScroll={syncArrows}
+          className="flex gap-2.5 overflow-x-auto pb-3 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {ASSETS.map(a => (
+            <WatchlistCard key={a.key} asset={tally[a.key]} priceData={priceMap[a.key]} />
+          ))}
+        </div>
+
+        {/* Scroll progress track */}
+        <ScrollTrack scrollRef={scrollRef} prices={prices} />
       </div>
+    </div>
+  )
+}
+
+function ScrollTrack({ scrollRef, prices }) {
+  const [pct, setPct] = useState(0)
+  const sync = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const max = el.scrollWidth - el.clientWidth
+    setPct(max > 0 ? (el.scrollLeft / max) * 100 : 0)
+  }, [scrollRef])
+
+  useEffect(() => {
+    sync()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', sync, { passive: true })
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', sync); ro.disconnect() }
+  }, [sync, prices])
+
+  return (
+    <div className="mt-1 h-[3px] bg-g100 rounded-full overflow-hidden mx-8">
+      <div
+        className="h-full bg-g300 rounded-full transition-all duration-150"
+        style={{ width: `${Math.max(8, pct)}%` }}
+      />
     </div>
   )
 }
@@ -895,10 +989,13 @@ export default function Market() {
 
         {/* Asset watchlist */}
         {(loading && pricesLoading) ? (
-          <div className="flex gap-2.5 mb-5 overflow-x-auto pb-2">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0 w-[148px] h-[108px] bg-g100 animate-pulse rounded-sm border border-g200" />
-            ))}
+          <div className="relative mb-5">
+            <div className="flex gap-2.5 overflow-x-hidden pb-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex-shrink-0 w-[148px] h-[116px] bg-g100 animate-pulse rounded-sm border border-g200" />
+              ))}
+            </div>
+            <div className="mt-1 h-[3px] bg-g100 rounded-full mx-8" />
           </div>
         ) : (
           <AssetWatchlist posts={posts} prices={prices} lastUpdated={lastUpdated} pricesUpdated={pricesUpdated} />
