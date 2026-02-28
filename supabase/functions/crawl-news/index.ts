@@ -132,7 +132,6 @@ serve(async (req: Request) => {
       }
 
       // Enrich article content: embed YouTube videos + inject inline Pexels images
-      const youtubeEmbed = extractYouTubeEmbed(fullContent)
       let enrichedContent = aiResult.content || `<p>${item.description || item.title}</p>`
       if (pexelsKey) {
         enrichedContent = await injectInlineImages(
@@ -140,6 +139,8 @@ serve(async (req: Request) => {
           aiResult.image_query || '', feed.category || 'world', pexelsKey, logs
         )
       }
+      // Search YouTube for a relevant news video on this topic
+      const youtubeEmbed = await searchYouTube(aiResult.title || item.title, logs)
       if (youtubeEmbed) {
         enrichedContent = injectVideoEmbed(enrichedContent, youtubeEmbed)
       }
@@ -466,17 +467,75 @@ function buildFallbackImage(imageQuery: string | undefined, slug: string): strin
   return `https://loremflickr.com/800/450/${encodeURIComponent(imageQuery.trim())}?lock=${slugToLock(slug)}`
 }
 
-// ─── YOUTUBE EXTRACTION ───────────────────────────────────────────────────────
+// ─── YOUTUBE SEARCH ───────────────────────────────────────────────────────────
 
-function extractYouTubeEmbed(html: string): string | null {
-  if (!html) return null
-  // Match youtube.com/watch?v=ID or youtu.be/ID or youtube.com/embed/ID
-  const match = html.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-  )
-  if (!match) return null
-  const videoId = match[1]
-  return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`
+// Invidious public instances — tried in order until one responds
+const INVIDIOUS_INSTANCES = [
+  'https://invidious.privacyredirect.com',
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://yt.artemislena.eu',
+]
+
+// Preferred news channel IDs — results from these channels are prioritised
+const NEWS_CHANNEL_IDS = new Set([
+  'UCupvZG-5ko_eiXAupbDfxWw', // CNN
+  'UCBi2mrWuNuyYy4gbM6fU18Q', // ABC News
+  'UCeY0bbntWzzVIaj2z3QigXg', // NBC News
+  'UC16niRr50-MSBwiO3YDb3RA', // BBC News
+  'UCNye-wNBqNL5ZzHSJj3l8Bg', // Al Jazeera English
+  'UCIALMKvObZNtJ6AmdCLP_xQ', // Reuters
+  'UC4uzUSCsBlfY9WUQZ78ws0g', // France 24
+  'UCWX3yGbODI3RREZdRCZMnpg', // DW News
+  'UCknLrEdhRCp1aegoMqRaCZg', // Sky News
+  'UCvJJ_dzjViJCoLf5uKUTwoA', // CGTN
+])
+
+function buildYouTubeQuery(title: string): string {
+  const STOP = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+    'is','are','was','were','has','have','had','as','it','its','this','that','from','will','be',
+    'been','can','could','would','should','says','said','new','amid','just','over','after','before',
+    'about','into','how','why','what','when','where','who','which','during','than','us','uk'])
+  const words = title.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length > 3 && !STOP.has(w.toLowerCase()))
+  // Keep top 6 keywords for a focused search
+  return words.slice(0, 6).join(' ')
+}
+
+async function searchYouTube(title: string, logs: string[]): Promise<string | null> {
+  const query = buildYouTubeQuery(title)
+  if (!query) return null
+
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance&page=1`
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'YUP News Bot/1.0' },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!res.ok) continue
+
+      const results: any[] = await res.json()
+      if (!Array.isArray(results) || results.length === 0) continue
+
+      // Prefer results from known news channels
+      const newsVideo = results.find(v => v.videoId && NEWS_CHANNEL_IDS.has(v.authorId))
+      const video = newsVideo || results.find(v => v.videoId)
+      if (!video?.videoId) continue
+
+      const videoId = video.videoId
+      const channelName = video.author || 'News'
+      const videoTitle = video.title || title
+      logs.push(`YouTube: ${videoTitle.substring(0, 60)} [${channelName}]`)
+
+      return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${videoId}" title="${videoTitle.replace(/"/g, '&quot;')}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`
+    } catch {
+      // Try next instance
+    }
+  }
+
+  logs.push(`YouTube search failed for: ${query.substring(0, 50)}`)
+  return null
 }
 
 function injectVideoEmbed(html: string, embedHtml: string): string {
