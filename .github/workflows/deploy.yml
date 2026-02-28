@@ -1,11 +1,11 @@
-name: Deploy to Netlify
+name: Build Check
 
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +25,3 @@ jobs:
           VITE_SITE_URL: ${{ secrets.VITE_SITE_URL }}
           VITE_SITE_NAME: ${{ secrets.VITE_SITE_NAME }}
           VITE_GA_ID: ${{ secrets.VITE_GA_ID }}
-
-      - name: Deploy to Netlify
-        run: npx netlify-cli@latest deploy --prod --dir=dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: 65345be3-baef-4f19-8488-7ccdd326d6f7

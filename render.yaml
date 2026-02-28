@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: yup-news
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_SITE_URL
+        sync: false
+      - key: VITE_SITE_NAME
+        sync: false
+      - key: VITE_GA_ID
+        sync: false
