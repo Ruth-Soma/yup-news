@@ -340,10 +340,7 @@ export default function Article() {
 
             {/* Meta */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.72rem] font-sans text-g500 pb-6 border-b border-g200 mb-8">
-              {post.source_name && post.source_url
-                ? <a href={post.source_url} target="_blank" rel="noopener noreferrer" className="hover:text-ink transition-colors">By {post.source_name}</a>
-                : <span>By {post.source_name || 'YUP Staff'}</span>
-              }
+              <span>By {post.source_name || 'YUP Staff'}</span>
               <span>·</span>
               <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
               <span>·</span>
@@ -369,15 +366,12 @@ export default function Article() {
               dangerouslySetInnerHTML={{ __html: post.content }}
             />
 
-            {/* Source attribution */}
+            {/* Source attribution — text credit only, no outbound link */}
             {post.source_name && (
               <div className="mt-10 pt-6 border-t border-g200">
                 <span className="text-[0.72rem] font-sans text-g500">
                   Originally reported by{' '}
-                  {post.source_url
-                    ? <a href={post.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-g600 underline underline-offset-2 decoration-g300 hover:decoration-ink transition-all">{post.source_name}</a>
-                    : <strong className="text-g600 font-medium">{post.source_name}</strong>
-                  }
+                  <strong className="text-g600 font-medium">{post.source_name}</strong>
                 </span>
               </div>
             )}
