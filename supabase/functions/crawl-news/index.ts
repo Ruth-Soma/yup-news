@@ -15,8 +15,10 @@ serve(async (req: Request) => {
   let newPostsCount = 0
   let skippedCount = 0
   let aiCallsThisRun = 0
-  const MAX_AI_CALLS = 6
-  const ITEMS_PER_FEED = 10
+  const MAX_AI_CALLS = 8       // 8 articles per run × 48 runs/day = ~380 posts/day max
+  const ITEMS_PER_FEED = 10   // keep memory footprint low
+  const RUN_BUDGET_MS = 120_000 // hard stop at 120 s to stay within 150 s Edge Function limit
+  const runStart = Date.now()
 
   try {
     // 1. Fetch active feeds
@@ -31,36 +33,42 @@ serve(async (req: Request) => {
     // 2. Load recent post titles for similarity dedup
     const { data: recent } = await supabase
       .from('posts').select('title, slug')
-      .order('published_at', { ascending: false }).limit(400)
+      .order('published_at', { ascending: false }).limit(200)
     const seenTitles: string[] = (recent || []).map((p: any) => p.title)
     const seenSlugs = new Set((recent || []).map((p: any) => p.slug))
     logs.push(`Loaded ${seenTitles.length} existing titles for dedup`)
 
-    // 3. Fetch ALL RSS feeds in parallel (fast!)
-    const feedResults = await Promise.allSettled(
-      shuffled.map(async (feed) => {
-        try {
-          const res = await fetch(feed.url, {
-            headers: { 'User-Agent': 'YUP News Bot/1.0' },
-            signal: AbortSignal.timeout(8000),
-          })
-          if (!res.ok) return { feed, items: [] }
-          const xml = await res.text()
-          const items = parseRSS(xml).slice(0, ITEMS_PER_FEED)
-          return { feed, items }
-        } catch {
-          return { feed, items: [] }
-        }
-      })
-    )
+    // 3. Fetch RSS feeds in batches of 8 (avoids WORKER_LIMIT from too many concurrent connections)
+    async function fetchFeed(feed: any) {
+      try {
+        const res = await fetch(feed.url, {
+          headers: { 'User-Agent': 'YUP News Bot/1.0' },
+          signal: AbortSignal.timeout(6000),
+        })
+        if (!res.ok) return { feed, items: [] }
+        const xml = await res.text()
+        const items = parseRSS(xml).slice(0, ITEMS_PER_FEED)
+        return { feed, items }
+      } catch {
+        return { feed, items: [] }
+      }
+    }
+
+    const BATCH_SIZE = 8
+    const feedResults: { feed: any; items: RSSItem[] }[] = []
+    for (let b = 0; b < shuffled.length; b += BATCH_SIZE) {
+      const batch = shuffled.slice(b, b + BATCH_SIZE)
+      const batchResults = await Promise.allSettled(batch.map(fetchFeed))
+      for (const r of batchResults) {
+        if (r.status === 'fulfilled') feedResults.push(r.value)
+      }
+    }
 
     // 4. Collect ALL candidates — dedup only against already-published posts (not within-run)
     //    Within-run similar stories are SIGNALS of trending topics, not duplicates.
     interface Candidate { feed: any; item: RSSItem; slug: string }
     const allCandidates: Candidate[] = []
-    for (const result of feedResults) {
-      if (result.status !== 'fulfilled') continue
-      const { feed, items } = result.value
+    for (const { feed, items } of feedResults) {
       for (const item of items) {
         if (!item.title || item.title.length < 10) continue
         const slug = generateSlug(item.title)
@@ -150,22 +158,26 @@ serve(async (req: Request) => {
       topCandidates.map(({ item }) => fetchFullContent(item.link, logs))
     )
 
+    const pexelsKey = Deno.env.get('PEXELS_API_KEY')
+
     // 7. Process top candidates sequentially with AI
     for (let i = 0; i < topCandidates.length; i++) {
-      const { feed, item, slug } = topCandidates[i]
+      // Hard time budget: stop before Edge Function is killed (150 s limit)
+      if (Date.now() - runStart > RUN_BUDGET_MS) {
+        logs.push(`Time budget reached after ${i} articles — stopping early`)
+        break
+      }
 
-      // Short gap between AI calls to stay under rate limit
-      if (aiCallsThisRun > 0) await new Promise(r => setTimeout(r, 1500))
+      const { feed, item, slug } = topCandidates[i]
       aiCallsThisRun++
 
       const fullContent = contentResults[i].status === 'fulfilled' ? contentResults[i].value : ''
       const sourceText = fullContent || item.description || item.title
+
       const aiResult = await rewriteWithAI(item.title, sourceText, logs)
       if (!aiResult) continue
 
-      // Image: always prefer Pexels (reliable, high-quality) → RSS image fallback
-      // Never use loremflickr — it returns black/blank images unpredictably
-      const pexelsKey = Deno.env.get('PEXELS_API_KEY')
+      // Image: Pexels first (reliable, high-quality) → RSS image fallback
       let coverImage: string | null = null
       if (pexelsKey && aiResult.image_query) {
         coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
@@ -175,18 +187,14 @@ serve(async (req: Request) => {
         coverImage = item.image
       }
 
-      // Enrich article content: embed YouTube videos + inject inline Pexels images
+      // Enrich content with inline images (skip if running low on time budget)
+      const timeLeft = RUN_BUDGET_MS - (Date.now() - runStart)
       let enrichedContent = aiResult.content || `<p>${item.description || item.title}</p>`
-      if (pexelsKey) {
+      if (pexelsKey && timeLeft > 25_000) {
         enrichedContent = await injectInlineImages(
           enrichedContent, aiResult.title || item.title,
           aiResult.image_query || '', feed.category || 'world', pexelsKey, logs
         )
-      }
-      // Search YouTube for a relevant news video on this topic
-      const youtubeEmbed = await searchYouTube(aiResult.title || item.title, logs)
-      if (youtubeEmbed) {
-        enrichedContent = injectVideoEmbed(enrichedContent, youtubeEmbed)
       }
 
       const { error: insertError } = await supabase.from('posts').insert({
@@ -247,8 +255,11 @@ serve(async (req: Request) => {
       )
     )
 
+    const elapsed = Math.round((Date.now() - runStart) / 1000)
+    logs.push(`Run complete in ${elapsed}s — ${newPostsCount} published, ${skippedCount} skipped, ${aiCallsThisRun} AI calls`)
+
     return new Response(
-      JSON.stringify({ success: true, new_posts: newPostsCount, skipped: skippedCount, ai_calls: aiCallsThisRun, logs }),
+      JSON.stringify({ success: true, new_posts: newPostsCount, skipped: skippedCount, ai_calls: aiCallsThisRun, elapsed_s: elapsed, logs }),
       { headers: { 'Content-Type': 'application/json' }, status: 200 }
     )
 
@@ -388,7 +399,7 @@ Return this exact JSON:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.65, maxOutputTokens: 8192, responseMimeType: 'application/json' },
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(15000),
       }
     )
     if (!response.ok) { logs.push(`Gemini ${response.status}: ${(await response.text()).substring(0, 150)}`); return null }
@@ -503,7 +514,7 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[], u
       const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
       if (!url) continue
       if (usedUrls && usedUrls.has(url)) continue
-      if (url) logs.push(`Pexels image: ${url.substring(0, 60)}`)
+        logs.push(`Pexels: ${url.substring(0, 60)}`)
       return url
     }
     // All top results used — just return the first one
@@ -547,12 +558,10 @@ function isTrustedImageHost(url: string): boolean {
 
 // ─── YOUTUBE SEARCH ───────────────────────────────────────────────────────────
 
-// Invidious public instances — tried in order until one responds
+// Invidious public instances — only 2, with aggressive timeout to stay within run budget
 const INVIDIOUS_INSTANCES = [
-  'https://invidious.privacyredirect.com',
   'https://inv.nadeko.net',
-  'https://invidious.nerdvpn.de',
-  'https://yt.artemislena.eu',
+  'https://invidious.privacyredirect.com',
 ]
 
 // Preferred news channel IDs — results from these channels are prioritised
@@ -589,7 +598,7 @@ async function searchYouTube(title: string, logs: string[]): Promise<string | nu
       const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance&page=1`
       const res = await fetch(url, {
         headers: { 'User-Agent': 'YUP News Bot/1.0' },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(2000),  // aggressive — 2 s max per instance
       })
       if (!res.ok) continue
 
@@ -685,7 +694,6 @@ async function injectInlineImages(
 
     // Insert figure at the END of this section (before the next <h2>)
     sections[idx] = sections[idx] + figure
-    await new Promise(r => setTimeout(r, 200))
   }
 
   return sections.join('')
