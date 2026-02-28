@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import SEO from '@/components/ui/SEO'
 import { usePosts } from '@/hooks/usePosts'
+import { useHotPosts } from '@/hooks/useHotPosts'
 import { useGeoRegion } from '@/hooks/useGeoRegion'
 import { useFeaturedPosts } from '@/hooks/useFeaturedPosts'
 import { getMostReadPosts } from '@/lib/queries'
@@ -362,7 +363,11 @@ export default function Home() {
     setUserPickedRegion(true)
   }
 
-  const { posts, loading, loadingMore, totalPages } = usePosts({ page, region, append: true })
+  // "All" tab uses hot-score ranking; region/country tabs use date order
+  const hotFeed  = useHotPosts({ page: region ? 1 : page })
+  const filteredFeed = usePosts({ page, region, append: true })
+  const activeFeed = region ? filteredFeed : hotFeed
+  const { posts, loading, loadingMore, totalPages } = activeFeed
   const { candidates } = useFeaturedPosts()
   const sentinelRef = useRef(null)
 

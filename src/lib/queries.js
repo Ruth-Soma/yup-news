@@ -107,6 +107,20 @@ export async function getFeaturedCandidates(topCategory) {
   }
 }
 
+// Hot-score ranking: (views + 2) / (age_hours + 2)^1.3
+// Recent popular posts rise; stale zero-view posts sink.
+export async function getHotPosts({ page = 1, category, region } = {}) {
+  const { data, error } = await supabase.rpc('get_hot_posts', {
+    p_region: region || null,
+    p_category: category || null,
+    p_page: page,
+    p_page_size: PAGE_SIZE,
+  })
+  const totalCount = Number(data?.[0]?.total_count || 0)
+  const posts = (data || []).map(({ total_count, ...post }) => post)
+  return { data: posts, error, count: totalCount, totalPages: Math.ceil(totalCount / PAGE_SIZE) }
+}
+
 export async function getBreakingNewsTicker() {
   const { data, error } = await supabase
     .from('posts')
