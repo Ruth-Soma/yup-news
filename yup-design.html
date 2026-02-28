@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YUP. — Breaking News</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Outfit:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --black:   #0a0a0a;
+  --white:   #fafafa;
+  --g100:    #f5f5f5;
+  --g200:    #e8e8e8;
+  --g300:    #d4d4d4;
+  --g400:    #a3a3a3;
+  --g500:    #737373;
+  --g600:    #525252;
+  --red:     #e63232;
+  --serif:   'Playfair Display', Georgia, serif;
+  --sans:    'Outfit', -apple-system, sans-serif;
+  --mono:    'Roboto Mono', monospace;
+  --ease:    cubic-bezier(0.16, 1, 0.3, 1);
+  --nav-h:   60px;
+  --tick-h:  38px;
+  --bar-h:   36px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--white);
+  color: var(--black);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+/* ══════════════════════════════════════════
+   TICKER
+══════════════════════════════════════════ */
+.ticker-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: var(--tick-h);
+  background: var(--black);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ticker-label {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px 0 20px;
+  border-right: 1px solid rgba(255,255,255,0.12);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--white);
+  height: 100%;
+  white-space: nowrap;
+}
+
+.ticker-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: blink 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.8); }
+}
+
+.ticker-track {
+  flex: 1;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%);
+}
+
+.ticker-inner {
+  display: inline-flex;
+  animation: scroll 55s linear infinite;
+  white-space: nowrap;
+}
+
+.ticker-inner:hover { animation-play-state: paused; }
+
+.ticker-item {
+  display: inline-flex; align-items: center; gap: 20px;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: rgba(255,255,255,0.78);
+  padding: 0 28px;
+}
+
+.ticker-item a:hover { color: var(--white); text-decoration: underline; text-underline-offset: 3px; }
+
+.ticker-sep {
+  width: 1px; height: 14px;
+  background: rgba(255,255,255,0.18);
+  flex-shrink: 0;
+}
+
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ══════════════════════════════════════════
+   NAV
+══════════════════════════════════════════ */
+nav {
+  position: fixed;
+  top: var(--tick-h); left: 0; right: 0;
+  z-index: 100;
+  background: rgba(250,250,250,0.94);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border-bottom: 1px solid var(--g200);
+  transition: box-shadow 0.3s;
+}
+
+.nav-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 clamp(20px, 4vw, 72px);
+  height: var(--nav-h);
+}
+
+.logo {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--black);
+  flex-shrink: 0;
+}
+
+.logo-dot {
+  font-weight: 300;
+  font-size: 0.5em;
+  color: var(--g400);
+  letter-spacing: 0;
+}
+
+.nav-links {
+  display: flex;
+}
+
+.nav-links a {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--g500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0 14px;
+  height: var(--nav-h);
+  display: flex; align-items: center;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.nav-links a:hover,
+.nav-links a.active { color: var(--black); border-bottom-color: var(--black); }
+
+.nav-right {
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+
+.nav-icon-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--g200);
+  cursor: pointer;
+  color: var(--g500);
+  transition: all 0.2s;
+  background: transparent;
+}
+
+.nav-icon-btn:hover { color: var(--black); border-color: var(--black); }
+
+.nav-subscribe {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0 18px;
+  height: 36px;
+  background: var(--black);
+  color: var(--white);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: opacity 0.2s;
+  cursor: pointer;
+  border: none;
+}
+
+.nav-subscribe:hover { opacity: 0.72; }
+
+.nav-hamburger {
+  display: none;
+  flex-direction: column; gap: 5px;
+  cursor: pointer;
+  padding: 4px;
+  background: none; border: none;
+}
+
+.nav-hamburger span {
+  display: block;
+  width: 22px; height: 1.5px;
+  background: var(--black);
+}
+
+/* Category bar */
+.nav-cats {
+  display: flex;
+  padding: 0 clamp(20px, 4vw, 72px);
+  height: var(--bar-h);
+  border-top: 1px solid var(--g200);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-cats::-webkit-scrollbar { display: none; }
+
+.cat-pill {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g500);
+  padding: 0 14px;
+  height: var(--bar-h);
+  display: flex; align-items: center;
+  white-space: nowrap;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  background: none; border-top: none; border-left: none; border-right: none;
+  border-bottom: 2px solid transparent;
+}
+
+.cat-pill:hover { color: var(--black); }
+.cat-pill.active { color: var(--black); border-bottom-color: var(--black); }
+
+/* ══════════════════════════════════════════
+   PAGE BODY
+══════════════════════════════════════════ */
+.page-body {
+  margin-top: calc(var(--tick-h) + var(--nav-h) + var(--bar-h));
+}
+
+/* ══════════════════════════════════════════
+   HERO — FULL GRID
+══════════════════════════════════════════ */
+.hero {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  min-height: 74vh;
+  border-bottom: 1px solid var(--g200);
+}
+
+.hero-main {
+  position: relative;
+  overflow: hidden;
+  border-right: 1px solid var(--g200);
+  cursor: pointer;
+  display: block;
+}
+
+.hero-bg {
+  position: absolute; inset: 0;
+  background: linear-gradient(145deg, #111 0%, #3a3a3a 45%, #1a1a1a 100%);
+  transition: transform 1.4s var(--ease);
+}
+
+.hero-main:hover .hero-bg { transform: scale(1.03); }
+
+.hero-texture {
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px);
+}
+
+.hero-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(10,10,10,0.95) 0%,
+    rgba(10,10,10,0.5) 38%,
+    rgba(10,10,10,0.05) 70%,
+    transparent 100%
+  );
+}
+
+.hero-text {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: clamp(28px, 3.5vw, 50px);
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 16px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+}
+
+.hero-eyebrow.breaking {
+  color: #ff9090;
+  border-color: rgba(230,50,50,0.3);
+  background: rgba(230,50,50,0.08);
+}
+
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.hero-h1 {
+  font-family: var(--serif);
+  font-size: clamp(1.9rem, 2.8vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.09;
+  letter-spacing: -0.022em;
+  color: var(--white);
+  margin-bottom: 16px;
+}
+
+.hero-h1 em { font-style: italic; color: rgba(255,255,255,0.6); }
+
+.hero-excerpt {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.52);
+  font-weight: 300;
+  line-height: 1.65;
+  max-width: 500px;
+  margin-bottom: 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hero-meta {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.38);
+  letter-spacing: 0.04em;
+}
+
+.hero-mdot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.2); flex-shrink: 0; }
+
+.hero-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 20px;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--white);
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  padding-bottom: 2px;
+  transition: border-color 0.2s;
+}
+
+.hero-main:hover .hero-cta { border-color: rgba(255,255,255,0.7); }
+
+/* Side column */
+.hero-side { display: flex; flex-direction: column; }
+
+.h-side-card {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+  border-bottom: 1px solid var(--g200);
+}
+
+.h-side-card:last-child { border-bottom: none; }
+
+.h-side-bg {
+  position: absolute; inset: 0;
+  transition: transform 1.2s var(--ease);
+}
+
+.h-side-card:hover .h-side-bg { transform: scale(1.04); }
+
+.h-side-bg-1 { background: linear-gradient(150deg, #0f0f0f 0%, #3a3a3a 60%, #111 100%); }
+.h-side-bg-2 { background: linear-gradient(140deg, #1a1a1a 0%, #555 100%); }
+
+.h-side-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0.25) 55%, transparent 100%);
+}
+
+.h-side-text {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 22px 26px 20px;
+}
+
+.h-side-cat {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 7px;
+}
+
+.h-side-h {
+  font-family: var(--serif);
+  font-size: clamp(0.95rem, 1.3vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  color: var(--white);
+}
+
+.h-side-meta {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.35);
+}
+
+/* ══════════════════════════════════════════
+   REGION BAR
+══════════════════════════════════════════ */
+.region-bar {
+  display: flex; align-items: center;
+  padding: 0 clamp(20px, 4vw, 72px);
+  border-bottom: 1px solid var(--g200);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.region-bar::-webkit-scrollbar { display: none; }
+
+.region-btn {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g400);
+  padding: 0 16px;
+  height: 44px;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.region-btn:hover { color: var(--black); }
+.region-btn.active { color: var(--black); border-bottom-color: var(--black); }
+
+.region-count {
+  font-size: 0.55rem;
+  color: var(--g300);
+  letter-spacing: 0;
+}
+
+/* ══════════════════════════════════════════
+   LAYOUT UTILS
+══════════════════════════════════════════ */
+.wrap { padding: 0 clamp(20px, 4vw, 72px); }
+
+.sec-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 44px 0 26px;
+  gap: 16px;
+}
+
+.sec-label-wrap { display: flex; align-items: center; gap: 14px; flex: 1; }
+
+.sec-label {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--g400);
+  white-space: nowrap;
+}
+
+.sec-line { height: 1px; background: var(--g200); flex: 1; }
+
+.sec-link {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--g400);
+  letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 5px;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+.sec-link:hover { color: var(--black); }
+.sec-link::after { content: '→'; }
+
+/* image placeholders */
+.ph { width: 100%; height: 100%; display: block; }
+.ph-1 { background: linear-gradient(145deg, #1a1a1a 0%, #444 45%, #1e1e1e 100%); }
+.ph-2 { background: linear-gradient(160deg, #0f0f0f 0%, #3d3d3d 60%, #111 100%); }
+.ph-3 { background: linear-gradient(125deg, #222 0%, #5a5a5a 100%); }
+.ph-4 { background: linear-gradient(150deg, #111 0%, #464646 50%, #1a1a1a 100%); }
+.ph-5 { background: linear-gradient(135deg, #2a2a2a 0%, #777 100%); }
+.ph-6 { background: linear-gradient(155deg, #0a0a0a 0%, #404040 100%); }
+.ph-light { background: linear-gradient(145deg, #e0e0e0 0%, #c4c4c4 50%, #d0d0d0 100%); }
+.ph-mid   { background: linear-gradient(145deg, #a0a0a0 0%, #707070 50%, #888 100%); }
+
+/* ══════════════════════════════════════════
+   FEATURED GRID
+══════════════════════════════════════════ */
+.feat-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  grid-template-rows: auto;
+  gap: 1px;
+  background: var(--g200);
+  border: 1px solid var(--g200);
+}
+
+.feat-card {
+  background: var(--white);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.28s;
+}
+.feat-card:hover { background: var(--g100); }
+
+.feat-thumb {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.feat-thumb div { transition: transform 0.9s var(--ease); }
+.feat-card:hover .feat-thumb div { transform: scale(1.05); }
+
+.feat-body { padding: 22px 26px 26px; display: flex; flex-direction: column; flex: 1; }
+
+.feat-num {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--g300);
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+}
+
+.feat-cat {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g400);
+  margin-bottom: 9px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.feat-cat.brk { color: var(--red); }
+
+.brk-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.feat-h {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.24;
+  letter-spacing: -0.01em;
+  flex: 1;
+  margin-bottom: 10px;
+}
+
+.feat-exc {
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--g500);
+  font-weight: 300;
+  margin-bottom: 18px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feat-meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--g400);
+  margin-top: auto;
+}
+.feat-mdot { width: 2px; height: 2px; border-radius: 50%; background: var(--g300); }
+
+/* Big card */
+.feat-card.big { grid-column: span 2; flex-direction: row; }
+.feat-card.big .feat-thumb { width: 45%; aspect-ratio: auto; flex-shrink: 0; }
+.feat-card.big .feat-thumb div { height: 100%; }
+.feat-card.big .feat-body { padding: 28px 32px; justify-content: center; }
+.feat-card.big .feat-h { font-size: 1.7rem; margin-bottom: 12px; }
+
+/* Small card thumbs */
+.feat-card:not(.big) .feat-thumb { aspect-ratio: 16/9; }
+
+/* ══════════════════════════════════════════
+   LATEST + SIDEBAR LAYOUT
+══════════════════════════════════════════ */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 288px;
+  gap: 0 56px;
+  padding-top: 0;
+  border-top: 2px solid var(--black);
+}
+
+/* Latest list */
+.latest-item {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 20px;
+  align-items: start;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--g200);
+  cursor: pointer;
+  transition: padding-left 0.35s var(--ease);
+}
+.latest-item:hover { padding-left: 8px; }
+
+.latest-body { display: flex; flex-direction: column; gap: 7px; }
+
+.latest-cat {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g400);
+  font-weight: 500;
+}
+.latest-cat.brk { color: var(--red); }
+
+.latest-h {
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+
+.latest-exc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--g500);
+  font-weight: 300;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.latest-meta {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--g400);
+  margin-top: 2px;
+}
+
+.latest-thumb {
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.latest-thumb div { transition: transform 0.8s var(--ease); height: 100%; }
+.latest-item:hover .latest-thumb div { transform: scale(1.07); }
+
+/* ══════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════ */
+.sidebar { padding-top: 0; }
+
+.sb-block { margin-bottom: 36px; }
+
+.sb-label {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--g400);
+  border-bottom: 1px solid var(--g200);
+  padding-bottom: 9px;
+  margin-bottom: 14px;
+}
+
+/* Most read */
+.mr-item {
+  display: flex; gap: 14px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--g200);
+  cursor: pointer;
+}
+.mr-item:last-child { border-bottom: none; }
+
+.mr-num {
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--g200);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 30px;
+  text-align: center;
+}
+
+.mr-cat {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--g400);
+  margin-bottom: 4px;
+}
+
+.mr-h {
+  font-family: var(--serif);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.3;
+  transition: opacity 0.2s;
+}
+.mr-item:hover .mr-h { opacity: 0.55; }
+
+/* Topic pills */
+.topic-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.topic-pill {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--g600);
+  border: 1px solid var(--g300);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.topic-pill:hover { background: var(--black); color: var(--white); border-color: var(--black); }
+
+/* ══════════════════════════════════════════
+   OPINION STRIP
+══════════════════════════════════════════ */
+.opinion-strip {
+  background: var(--g100);
+  border-top: 1px solid var(--g200);
+  border-bottom: 1px solid var(--g200);
+  margin: 56px 0 0;
+}
+
+.opinion-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--g200);
+}
+
+.op-card {
+  background: var(--g100);
+  padding: 30px 28px;
+  cursor: pointer;
+  transition: background 0.28s;
+}
+.op-card:hover { background: var(--g200); }
+
+.op-author {
+  display: flex; align-items: center; gap: 11px;
+  margin-bottom: 14px;
+}
+
+.op-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--white);
+}
+.av-1 { background: linear-gradient(135deg, #2a2a2a, #555); }
+.av-2 { background: linear-gradient(135deg, #1a1a1a, #444); }
+.av-3 { background: linear-gradient(135deg, #333, #666); }
+
+.op-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.op-role {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--g400);
+  margin-top: 2px;
+}
+
+.op-type {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g500);
+  margin-bottom: 9px;
+}
+
+.op-quote {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 400;
+  line-height: 1.38;
+  letter-spacing: -0.01em;
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════
+   LONGFORM
+══════════════════════════════════════════ */
+.lf-item {
+  display: grid;
+  grid-template-columns: 72px 1fr 130px;
+  gap: 0 28px;
+  align-items: center;
+  padding: 26px 0;
+  border-bottom: 1px solid var(--g200);
+  cursor: pointer;
+  transition: padding-left 0.35s var(--ease);
+}
+.lf-item:hover { padding-left: 10px; }
+
+.lf-num {
+  font-family: var(--serif);
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: var(--g200);
+  line-height: 1;
+  text-align: right;
+}
+
+.lf-cat {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--g400);
+  font-weight: 500;
+  margin-bottom: 7px;
+}
+
+.lf-h {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.lf-sub {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--g500);
+  font-weight: 300;
+  margin-top: 5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lf-meta {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--g400);
+  text-align: right;
+  line-height: 1.8;
+}
+
+/* ══════════════════════════════════════════
+   NEWSLETTER
+══════════════════════════════════════════ */
+.nl-section {
+  margin: 64px clamp(20px, 4vw, 72px);
+  background: var(--black);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative;
+  overflow: hidden;
+}
+
+.nl-left {
+  padding: clamp(40px, 5vw, 68px);
+  border-right: 1px solid rgba(255,255,255,0.07);
+  position: relative; z-index: 1;
+}
+
+.nl-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 10px;
+}
+.nl-eyebrow::before { content: ''; display: block; width: 18px; height: 1px; background: rgba(255,255,255,0.25); }
+
+.nl-h {
+  font-family: var(--serif);
+  font-size: clamp(1.8rem, 2.8vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--white);
+  margin-bottom: 14px;
+}
+.nl-h em { font-style: italic; color: rgba(255,255,255,0.5); }
+
+.nl-p {
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.42);
+  font-weight: 300;
+  line-height: 1.65;
+}
+
+.nl-right {
+  padding: clamp(40px, 5vw, 68px);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 16px;
+  position: relative; z-index: 1;
+}
+
+.nl-stats {
+  display: flex; gap: 28px;
+  margin-bottom: 4px;
+}
+
+.nl-stat-n {
+  font-family: var(--serif);
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--white);
+  line-height: 1;
+}
+
+.nl-stat-l {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  margin-top: 4px;
+}
+
+.nl-form { display: flex; flex-direction: column; gap: 8px; }
+
+.nl-input {
+  padding: 13px 16px;
+  border: 1px solid rgba(255,255,255,0.13);
+  background: rgba(255,255,255,0.05);
+  color: var(--white);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.25s;
+  width: 100%;
+  border-radius: 0;
+}
+.nl-input::placeholder { color: rgba(255,255,255,0.22); }
+.nl-input:focus { border-color: rgba(255,255,255,0.38); }
+
+.nl-btn {
+  padding: 13px;
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  width: 100%;
+}
+.nl-btn:hover { opacity: 0.82; }
+
+.nl-note {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.22);
+  line-height: 1.5;
+}
+
+/* Decorative circle */
+.nl-deco {
+  position: absolute;
+  right: -120px; bottom: -120px;
+  width: 340px; height: 340px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+.nl-deco::before {
+  content: '';
+  position: absolute;
+  inset: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.035);
+}
+
+/* ══════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════ */
+footer {
+  border-top: 1px solid var(--g200);
+  padding: 0 clamp(20px, 4vw, 72px);
+}
+
+.footer-top {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr 1fr;
+  gap: 40px;
+  padding: 48px 0;
+  border-bottom: 1px solid var(--g200);
+}
+
+.ft-logo {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 2.1rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.ft-tagline {
+  font-size: 0.78rem;
+  color: var(--g500);
+  font-weight: 300;
+  line-height: 1.65;
+}
+
+.ft-col-label {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--g400);
+  margin-bottom: 13px;
+}
+
+.ft-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ft-col ul li a { font-size: 0.82rem; color: var(--g600); transition: color 0.2s; }
+.ft-col ul li a:hover { color: var(--black); }
+
+.footer-bottom {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 0;
+  flex-wrap: wrap; gap: 10px;
+}
+
+.ft-copy {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--g400);
+}
+
+.ft-socials { display: flex; gap: 0; }
+
+.soc-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--g400);
+  border: 1px solid var(--g200);
+  margin-left: -1px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+.soc-btn:hover { background: var(--black); color: var(--white); border-color: var(--black); z-index: 1; position: relative; }
+
+/* ══════════════════════════════════════════
+   SCROLL REVEAL
+══════════════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+}
+.reveal.in { opacity: 1; transform: none; }
+.r-d1 { transition-delay: 0.08s; }
+.r-d2 { transition-delay: 0.16s; }
+.r-d3 { transition-delay: 0.24s; }
+
+/* ══════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 1100px) {
+  .feat-card.big { flex-direction: column; }
+  .feat-card.big .feat-thumb { width: 100%; aspect-ratio: 16/8; }
+  .feat-card.big .feat-thumb div { height: 100%; }
+}
+
+@media (max-width: 1024px) {
+  .hero { grid-template-columns: 1fr; min-height: auto; }
+  .hero-main { aspect-ratio: 16/9; }
+  .hero-side { flex-direction: row; }
+  .h-side-card { aspect-ratio: 4/3; }
+  .content-grid { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .lf-item { grid-template-columns: 60px 1fr; }
+  .lf-meta { display: none; }
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 28px; }
+}
+
+@media (max-width: 768px) {
+  :root { --nav-h: 52px; --tick-h: 34px; --bar-h: 0px; }
+  .nav-links { display: none; }
+  .nav-cats { display: none; }
+  .nav-hamburger { display: flex; }
+  .nav-subscribe { display: none; }
+  .hero-side { flex-direction: column; }
+  .h-side-card { aspect-ratio: 16/8; }
+  .feat-grid { grid-template-columns: 1fr; }
+  .feat-card.big { grid-column: 1; flex-direction: column; }
+  .feat-card.big .feat-thumb { width: 100%; aspect-ratio: 16/9; }
+  .op-card .opinion-inner,
+  .opinion-inner { grid-template-columns: 1fr; }
+  .nl-section { grid-template-columns: 1fr; }
+  .nl-left { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .latest-thumb { display: none; }
+  .latest-item { grid-template-columns: 1fr; }
+  .lf-item { grid-template-columns: 1fr; }
+  .lf-num { display: none; }
+  .footer-top { grid-template-columns: 1fr; gap: 22px; }
+}
+
+@media (max-width: 480px) {
+  .hero-text { padding: 22px 18px 18px; }
+  .hero-h1 { font-size: 1.6rem; }
+  .wrap { padding: 0 16px; }
+  .nl-section { margin: 40px 16px; }
+  .opinion-inner { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker-bar">
+  <div class="ticker-label">
+    <span class="ticker-dot"></span>Live
+  </div>
+  <div class="ticker-track">
+    <div class="ticker-inner">
+      <span class="ticker-item">
+        <span class="ticker-sep"></span>
+        <a href="#">Nigeria Senate approves landmark economic reform bill in late-night session</a>
+        <span class="ticker-sep"></span>
+        <a href="#">US Federal Reserve signals rate cuts as inflation slows to 2.1%</a>
+        <span class="ticker-sep"></span>
+        <a href="#">World leaders convene emergency summit on AI governance</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Lagos floods displace 40,000 residents; relief operations underway</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Super Eagles secure World Cup 2026 spot with dramatic late goal</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Breaking: Ceasefire agreement reached after 14 months of conflict</a>
+      </span>
+      <span class="ticker-item" aria-hidden="true">
+        <span class="ticker-sep"></span>
+        <a href="#">Nigeria Senate approves landmark economic reform bill in late-night session</a>
+        <span class="ticker-sep"></span>
+        <a href="#">US Federal Reserve signals rate cuts as inflation slows to 2.1%</a>
+        <span class="ticker-sep"></span>
+        <a href="#">World leaders convene emergency summit on AI governance</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Lagos floods displace 40,000 residents; relief operations underway</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Super Eagles secure World Cup 2026 spot with dramatic late goal</a>
+        <span class="ticker-sep"></span>
+        <a href="#">Breaking: Ceasefire agreement reached after 14 months of conflict</a>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-top">
+    <button class="nav-hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <a href="#" class="logo">YUP<span class="logo-dot">.</span></a>
+
+    <div class="nav-links">
+      <a href="#" class="active">Breaking</a>
+      <a href="#">World</a>
+      <a href="#">Nigeria</a>
+      <a href="#">US</a>
+      <a href="#">Tech</a>
+      <a href="#">Opinion</a>
+      <a href="#">Sports</a>
+    </div>
+
+    <div class="nav-right">
+      <button class="nav-icon-btn" aria-label="Search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+      <button class="nav-subscribe">Subscribe</button>
+    </div>
+  </div>
+
+  <div class="nav-cats">
+    <button class="cat-pill active">All</button>
+    <button class="cat-pill">Politics</button>
+    <button class="cat-pill">Business</button>
+    <button class="cat-pill">Technology</button>
+    <button class="cat-pill">Sports</button>
+    <button class="cat-pill">Entertainment</button>
+    <button class="cat-pill">Health</button>
+    <button class="cat-pill">Science</button>
+    <button class="cat-pill">Culture</button>
+  </div>
+</nav>
+
+<!-- PAGE -->
+<div class="page-body">
+
+  <!-- HERO -->
+  <section class="hero">
+    <a href="#" class="hero-main">
+      <div class="hero-bg"></div>
+      <div class="hero-texture"></div>
+      <div class="hero-overlay"></div>
+      <div class="hero-text">
+        <div class="hero-eyebrow breaking">
+          <span class="live-dot"></span>
+          Breaking News
+        </div>
+        <h1 class="hero-h1">The Quiet Revolution<br><em>Reshaping</em> How We Live</h1>
+        <p class="hero-excerpt">A generation of designers, engineers, and thinkers are building a world that works differently — not louder, but smarter.</p>
+        <div class="hero-meta">
+          <span>By Elena Marchetti</span>
+          <span class="hero-mdot"></span>
+          <span>12 min read</span>
+          <span class="hero-mdot"></span>
+          <span>Feb 26, 2026</span>
+        </div>
+        <div class="hero-cta">Read story <span>→</span></div>
+      </div>
+    </a>
+
+    <div class="hero-side">
+      <a href="#" class="h-side-card">
+        <div class="h-side-bg h-side-bg-1"></div>
+        <div class="h-side-overlay"></div>
+        <div class="h-side-text">
+          <div class="h-side-cat">Nigeria · Politics</div>
+          <h2 class="h-side-h">Senate passes historic economic reform amid nationwide protests</h2>
+          <div class="h-side-meta">3 hr ago · 8 min read</div>
+        </div>
+      </a>
+      <a href="#" class="h-side-card">
+        <div class="h-side-bg h-side-bg-2"></div>
+        <div class="h-side-overlay"></div>
+        <div class="h-side-text">
+          <div class="h-side-cat">United States · Economy</div>
+          <h2 class="h-side-h">Fed hints at three rate cuts before year-end, markets surge</h2>
+          <div class="h-side-meta">5 hr ago · 6 min read</div>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- REGION TABS -->
+  <div class="region-bar">
+    <button class="region-btn active">All <span class="region-count">1,248</span></button>
+    <button class="region-btn">United States <span class="region-count">412</span></button>
+    <button class="region-btn">Nigeria <span class="region-count">389</span></button>
+    <button class="region-btn">World <span class="region-count">447</span></button>
+  </div>
+
+  <!-- FEATURED -->
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label-wrap">
+        <span class="sec-label">Featured</span>
+        <div class="sec-line"></div>
+      </div>
+      <a href="#" class="sec-link">View all</a>
+    </div>
+
+    <div class="feat-grid reveal">
+      <!-- Big card -->
+      <a href="#" class="feat-card big">
+        <div class="feat-thumb">
+          <div class="ph ph-4"></div>
+        </div>
+        <div class="feat-body">
+          <div class="feat-cat brk"><span class="brk-dot"></span> Breaking</div>
+          <h3 class="feat-h">Global Leaders Reach Landmark Climate Agreement in Geneva Summit</h3>
+          <p class="feat-exc">After 72 hours of intensive negotiations, world leaders agreed on binding carbon targets that scientists say could limit warming to 1.5°C by 2050.</p>
+          <div class="feat-meta">
+            <span>World</span>
+            <span class="feat-mdot"></span>
+            <span>Adaeze Okonkwo</span>
+            <span class="feat-mdot"></span>
+            <span>1 hr ago</span>
+            <span class="feat-mdot"></span>
+            <span>9 min read</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="#" class="feat-card">
+        <div class="feat-thumb"><div class="ph ph-5"></div></div>
+        <div class="feat-body">
+          <div class="feat-num">02</div>
+          <div class="feat-cat">Technology</div>
+          <h3 class="feat-h">OpenAI Releases Model That Passes Medical Licensing Exams</h3>
+          <p class="feat-exc">The model scored in the 98th percentile, reigniting debates about AI in healthcare.</p>
+          <div class="feat-meta"><span>Tech</span><span class="feat-mdot"></span><span>2 hr ago</span></div>
+        </div>
+      </a>
+
+      <a href="#" class="feat-card">
+        <div class="feat-thumb"><div class="ph ph-6"></div></div>
+        <div class="feat-body">
+          <div class="feat-num">03</div>
+          <div class="feat-cat">Nigeria</div>
+          <h3 class="feat-h">Naira Gains 8% Against Dollar as Reserves Hit Three-Year High</h3>
+          <p class="feat-exc">The Central Bank credits structural reforms and increased oil revenue for the gains.</p>
+          <div class="feat-meta"><span>Economy</span><span class="feat-mdot"></span><span>4 hr ago</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- LATEST + SIDEBAR -->
+  <div class="wrap" style="margin-top:52px;">
+    <div class="sec-head">
+      <div class="sec-label-wrap">
+        <span class="sec-label">Latest Stories</span>
+        <div class="sec-line"></div>
+      </div>
+      <a href="#" class="sec-link">All stories</a>
+    </div>
+
+    <div class="content-grid">
+      <div>
+        <a href="#" class="latest-item reveal">
+          <div class="latest-body">
+            <div class="latest-cat brk">Breaking · Nigeria</div>
+            <h3 class="latest-h">Lagos Floods Force Emergency Evacuation of Thousands After Dam Overflow</h3>
+            <p class="latest-exc">State emergency management authorities scrambled overnight as rising water breached barriers in three local government areas.</p>
+            <div class="latest-meta"><span>Chidi Okafor</span><span>·</span><span>25 min ago</span><span>·</span><span>5 min read</span></div>
+          </div>
+          <div class="latest-thumb"><div class="ph ph-1"></div></div>
+        </a>
+
+        <a href="#" class="latest-item reveal r-d1">
+          <div class="latest-body">
+            <div class="latest-cat">US News · Politics</div>
+            <h3 class="latest-h">Senate Democrats Unveil $2.4 Trillion Infrastructure Package Targeting Rural Communities</h3>
+            <p class="latest-exc">The sweeping proposal includes broadband expansion, bridge repairs, and clean energy investments across underserved states.</p>
+            <div class="latest-meta"><span>Marcus Webb</span><span>·</span><span>1 hr ago</span><span>·</span><span>7 min read</span></div>
+          </div>
+          <div class="latest-thumb"><div class="ph ph-mid"></div></div>
+        </a>
+
+        <a href="#" class="latest-item reveal r-d2">
+          <div class="latest-body">
+            <div class="latest-cat">Technology</div>
+            <h3 class="latest-h">Apple Confirms Vision Pro 2 With Neural Interface and 40-Hour Battery Life</h3>
+            <p class="latest-exc">The announcement signals Apple's aggressive push into spatial computing for enterprise use.</p>
+            <div class="latest-meta"><span>2 hr ago</span><span>·</span><span>4 min read</span></div>
+          </div>
+          <div class="latest-thumb"><div class="ph ph-2"></div></div>
+        </a>
+
+        <a href="#" class="latest-item reveal">
+          <div class="latest-body">
+            <div class="latest-cat">Sports · Nigeria</div>
+            <h3 class="latest-h">Super Eagles Secure World Cup 2026 Spot with Last-Minute Osimhen Header</h3>
+            <p class="latest-exc">Victor Osimhen's 94th-minute header against Ivory Coast sent Nigerians into celebrations across the country.</p>
+            <div class="latest-meta"><span>Emeka Nwachukwu</span><span>·</span><span>3 hr ago</span><span>·</span><span>6 min read</span></div>
+          </div>
+          <div class="latest-thumb"><div class="ph ph-3"></div></div>
+        </a>
+
+        <a href="#" class="latest-item reveal r-d1">
+          <div class="latest-body">
+            <div class="latest-cat">Health</div>
+            <h3 class="latest-h">WHO Declares End of Mpox Global Health Emergency After Vaccine Rollout</h3>
+            <p class="latest-exc">A coordinated campaign reaching 58 countries drove cases down by 94% over 18 months.</p>
+            <div class="latest-meta"><span>4 hr ago</span><span>·</span><span>5 min read</span></div>
+          </div>
+          <div class="latest-thumb"><div class="ph ph-light"></div></div>
+        </a>
+      </div>
+
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sb-block reveal">
+          <div class="sb-label">Most Read Today</div>
+          <div class="mr-item">
+            <div class="mr-num">01</div>
+            <div><div class="mr-cat">Breaking</div><div class="mr-h">Ceasefire Agreement Reached After 14 Months of Conflict</div></div>
+          </div>
+          <div class="mr-item">
+            <div class="mr-num">02</div>
+            <div><div class="mr-cat">Nigeria</div><div class="mr-h">CBN Announces Landmark Digital Currency Framework</div></div>
+          </div>
+          <div class="mr-item">
+            <div class="mr-num">03</div>
+            <div><div class="mr-cat">Technology</div><div class="mr-h">Google Launches Gemini Ultra 3 — What It Means for You</div></div>
+          </div>
+          <div class="mr-item">
+            <div class="mr-num">04</div>
+            <div><div class="mr-cat">US Politics</div><div class="mr-h">White House Emergency Energy Order Amid Blackout Fears</div></div>
+          </div>
+          <div class="mr-item">
+            <div class="mr-num">05</div>
+            <div><div class="mr-cat">Sports</div><div class="mr-h">Super Eagles Break African TV Viewership Record</div></div>
+          </div>
+        </div>
+
+        <div class="sb-block reveal">
+          <div class="sb-label">Browse Topics</div>
+          <div class="topic-pills">
+            <span class="topic-pill">Politics</span>
+            <span class="topic-pill">Economy</span>
+            <span class="topic-pill">Technology</span>
+            <span class="topic-pill">Nigeria</span>
+            <span class="topic-pill">United States</span>
+            <span class="topic-pill">Sports</span>
+            <span class="topic-pill">Climate</span>
+            <span class="topic-pill">Health</span>
+            <span class="topic-pill">Culture</span>
+          </div>
+        </div>
+
+        <div class="sb-block reveal">
+          <div class="sb-label">Today — Feb 26, 2026</div>
+          <div style="font-size:0.8rem;color:var(--g500);line-height:1.8;font-weight:300;">
+            <div><strong style="font-weight:600;color:var(--black);">1,248</strong> stories published</div>
+            <div><strong style="font-weight:600;color:var(--black);">38</strong> breaking alerts</div>
+            <div><strong style="font-weight:600;color:var(--black);">3</strong> live events tracked</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- OPINION -->
+  <section class="opinion-strip reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-label-wrap">
+          <span class="sec-label">Opinion &amp; Analysis</span>
+          <div class="sec-line"></div>
+        </div>
+        <a href="#" class="sec-link">All opinion</a>
+      </div>
+    </div>
+    <div class="opinion-inner">
+      <div class="op-card">
+        <div class="op-author">
+          <div class="op-avatar av-1">EM</div>
+          <div>
+            <div class="op-name">Elena Marchetti</div>
+            <div class="op-role">Senior Correspondent, World Desk</div>
+          </div>
+        </div>
+        <div class="op-type">Opinion</div>
+        <p class="op-quote">"The internet promised us everything. What it delivered was a world more anxious, more divided, and less patient than the one it replaced."</p>
+      </div>
+      <div class="op-card">
+        <div class="op-author">
+          <div class="op-avatar av-2">CO</div>
+          <div>
+            <div class="op-name">Chidi Okafor</div>
+            <div class="op-role">West Africa Editor</div>
+          </div>
+        </div>
+        <div class="op-type">Analysis</div>
+        <p class="op-quote">"Nigeria's economic reforms are real — but they will only hold if institutions do. Right now, institutions are the weakest part of the equation."</p>
+      </div>
+      <div class="op-card">
+        <div class="op-author">
+          <div class="op-avatar av-3">MW</div>
+          <div>
+            <div class="op-name">Marcus Webb</div>
+            <div class="op-role">Washington Bureau Chief</div>
+          </div>
+        </div>
+        <div class="op-type">Essay</div>
+        <p class="op-quote">"American democracy is not dying. It is being stress-tested — and the question is whether its foundations were built to last this kind of pressure."</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- LONGFORM -->
+  <div class="wrap" style="margin-top:0;">
+    <div class="sec-head">
+      <div class="sec-label-wrap">
+        <span class="sec-label">In Depth</span>
+        <div class="sec-line"></div>
+      </div>
+      <a href="#" class="sec-link">All features</a>
+    </div>
+    <div class="reveal">
+      <a href="#" class="lf-item">
+        <div class="lf-num">01</div>
+        <div>
+          <div class="lf-cat">World</div>
+          <h3 class="lf-h">The Hidden Cost of AI Infrastructure</h3>
+          <div class="lf-sub">Behind every large language model lies a staggering environmental debt — a story the tech industry has been reluctant to tell.</div>
+        </div>
+        <div class="lf-meta">Technology<br><span>18 min read</span></div>
+      </a>
+      <a href="#" class="lf-item">
+        <div class="lf-num">02</div>
+        <div>
+          <div class="lf-cat">Nigeria</div>
+          <h3 class="lf-h">Lagos at 50: A Megacity Without a Plan</h3>
+          <div class="lf-sub">Africa's most populous city grows by a million people every two years. Its infrastructure is not. Who's responsible for what comes next?</div>
+        </div>
+        <div class="lf-meta">Urban Affairs<br><span>22 min read</span></div>
+      </a>
+      <a href="#" class="lf-item">
+        <div class="lf-num">03</div>
+        <div>
+          <div class="lf-cat">United States</div>
+          <h3 class="lf-h">The Loneliness Economy: How America Monetized Isolation</h3>
+          <div class="lf-sub">From subscription social apps to paid friendship services — a new industry filling the void left by the collapse of American community.</div>
+        </div>
+        <div class="lf-meta">Society<br><span>15 min read</span></div>
+      </a>
+      <a href="#" class="lf-item">
+        <div class="lf-num">04</div>
+        <div>
+          <div class="lf-cat">World</div>
+          <h3 class="lf-h">Inside the Rare Earth Race That Will Shape the Next Century</h3>
+          <div class="lf-sub">Control of lithium, cobalt, and manganese deposits has become the defining geopolitical contest of our era — and most people haven't noticed.</div>
+        </div>
+        <div class="lf-meta">Geopolitics<br><span>24 min read</span></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- NEWSLETTER -->
+  <div class="nl-section reveal">
+    <div class="nl-left">
+      <div class="nl-eyebrow">Daily Briefing</div>
+      <h2 class="nl-h">News that <em>matters</em>,<br>delivered daily.</h2>
+      <p class="nl-p">Curated breaking news from the US, Nigeria, and the world — no noise, just the stories that matter. Every morning at 7am.</p>
+    </div>
+    <div class="nl-right">
+      <div class="nl-stats">
+        <div>
+          <div class="nl-stat-n">84K</div>
+          <div class="nl-stat-l">Subscribers</div>
+        </div>
+        <div>
+          <div class="nl-stat-n">94%</div>
+          <div class="nl-stat-l">Open rate</div>
+        </div>
+      </div>
+      <form class="nl-form" onsubmit="return false;">
+        <input class="nl-input" type="email" placeholder="your@email.com" />
+        <button class="nl-btn" type="submit">Get the daily briefing</button>
+      </form>
+      <p class="nl-note">No spam. Unsubscribe anytime. We respect your privacy.</p>
+    </div>
+    <div class="nl-deco"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-top">
+      <div>
+        <div class="ft-logo">YUP.</div>
+        <p class="ft-tagline">Breaking news from the US, Nigeria, and the world — updated every 30 minutes.</p>
+      </div>
+      <div class="ft-col">
+        <div class="ft-col-label">Sections</div>
+        <ul>
+          <li><a href="#">Breaking News</a></li>
+          <li><a href="#">Politics</a></li>
+          <li><a href="#">Business</a></li>
+          <li><a href="#">Technology</a></li>
+          <li><a href="#">Sports</a></li>
+          <li><a href="#">Culture</a></li>
+        </ul>
+      </div>
+      <div class="ft-col">
+        <div class="ft-col-label">Regions</div>
+        <ul>
+          <li><a href="#">United States</a></li>
+          <li><a href="#">Nigeria</a></li>
+          <li><a href="#">Africa</a></li>
+          <li><a href="#">Europe</a></li>
+          <li><a href="#">Asia</a></li>
+          <li><a href="#">World</a></li>
+        </ul>
+      </div>
+      <div class="ft-col">
+        <div class="ft-col-label">Company</div>
+        <ul>
+          <li><a href="#">About YUP</a></li>
+          <li><a href="#">Editorial Policy</a></li>
+          <li><a href="#">Advertise</a></li>
+          <li><a href="#">Contact</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Use</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="ft-copy">© 2026 YUP Media Ltd. All rights reserved. AI-assisted journalism.</p>
+      <div class="ft-socials">
+        <a href="#" class="soc-btn">𝕏</a>
+        <a href="#" class="soc-btn">in</a>
+        <a href="#" class="soc-btn">f</a>
+        <a href="#" class="soc-btn">ig</a>
+        <a href="#" class="soc-btn" title="RSS">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Scroll reveal
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  });
+}, { threshold: 0.07, rootMargin: '0px 0px -36px 0px' });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// Nav active pills
+document.querySelectorAll('.cat-pill').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.cat-pill').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+});
+
+document.querySelectorAll('.region-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.region-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+});
+
+// Nav scroll shadow
+const nav = document.querySelector('nav');
+window.addEventListener('scroll', () => {
+  nav.style.boxShadow = scrollY > 8 ? '0 2px 24px rgba(0,0,0,0.07)' : 'none';
+}, { passive: true });
+</script>
+</body>
+</html>

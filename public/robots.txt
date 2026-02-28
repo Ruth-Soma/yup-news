@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/sitemap

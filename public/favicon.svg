@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background: ink-coloured rounded square -->
+  <rect width="100" height="100" rx="22" fill="#0A0A0A"/>
+  <!-- Geometric lowercase "y": two arms meeting at a V, then a descending tail -->
+  <path
+    d="M 23 17 L 50 54 M 77 17 L 50 54 M 50 54 L 37 83"
+    stroke="#F5F0E8"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>
