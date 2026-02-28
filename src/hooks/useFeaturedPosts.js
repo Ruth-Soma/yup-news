@@ -63,6 +63,10 @@ export function useFeaturedPosts() {
     const interests = JSON.parse(localStorage.getItem('yup_interests') || '{}')
     const topCategory = Object.entries(interests).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
 
+    // Top country from click history (ISO 3166-1 alpha-2 code)
+    const countryInterests = JSON.parse(localStorage.getItem('yup_country_interests') || '{}')
+    const topCountry = Object.entries(countryInterests).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+
     // Read continent from geo detection (set by useGeoRegion via sessionStorage)
     let geoRegion = null
     try {
@@ -70,7 +74,7 @@ export function useFeaturedPosts() {
       geoRegion = geo.continent || null
     } catch {}
 
-    getFeaturedCandidates(topCategory, geoRegion).then(({ breaking, related, fresh, world, geo }) => {
+    getFeaturedCandidates(topCategory, geoRegion, topCountry).then(({ breaking, related, fresh, world, geo, countryPosts }) => {
       const seen = new Set()
       const results = []
       const add = (pool, n, label) => {
@@ -79,11 +83,12 @@ export function useFeaturedPosts() {
         }
       }
 
-      add(breaking, 2, 'breaking') // up to 2 breaking news
-      add(related,  2, 'for-you')  // up to 2 from user's top interest category
-      add(geo,      2, 'for-you')  // up to 2 from user's home continent
-      add(fresh,    2, 'latest')   // up to 2 freshly published posts
-      add(world,    1, 'world')    // 1 popular world post
+      add(breaking,      2, 'breaking') // up to 2 breaking news
+      add(countryPosts,  2, 'for-you')  // up to 2 from user's most-read country (highest signal)
+      add(related,       2, 'for-you')  // up to 2 from user's top interest category
+      add(geo,           1, 'for-you')  // up to 1 from user's home continent
+      add(fresh,         2, 'latest')   // up to 2 freshly published posts
+      add(world,         1, 'world')    // 1 popular world post
 
       setCandidates(results)
       setLoading(false)

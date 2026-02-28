@@ -10,7 +10,7 @@ export async function getPosts({ page = 1, category, region, status = 'published
 
   let query = supabase
     .from('posts')
-    .select('id, title, slug, excerpt, cover_image, category, region, tags, source_name, views, published_at, comments(count)', { count: 'exact' })
+    .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, tags, source_name, views, published_at, comments(count)', { count: 'exact' })
     .eq('status', status)
     .lte('published_at', new Date().toISOString())
     .order('published_at', { ascending: false })
@@ -61,7 +61,7 @@ export async function getMoreFromCategory(category, excludeSlugs = [], limit = 8
 export async function getPopularPosts(limit = 9) {
   const { data, error } = await supabase
     .from('posts')
-    .select('id, title, slug, excerpt, cover_image, category, region, views, published_at')
+    .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, views, published_at')
     .eq('status', 'published')
     .order('views', { ascending: false })
     .order('published_at', { ascending: false })
@@ -79,11 +79,11 @@ export async function getMostReadPosts() {
   return { data, error }
 }
 
-export async function getFeaturedCandidates(topCategory, geoRegion = null) {
+export async function getFeaturedCandidates(topCategory, geoRegion = null, topCountry = null) {
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-  const SELECT = 'id, title, slug, excerpt, cover_image, category, region, source_name, views, published_at'
+  const SELECT = 'id, title, slug, excerpt, cover_image, category, region, country, country_code, source_name, views, published_at'
 
-  const [breakingRes, relatedRes, freshRes, worldRes, geoRes] = await Promise.all([
+  const [breakingRes, relatedRes, freshRes, worldRes, geoRes, countryRes] = await Promise.all([
     // 1. Breaking news in the last 6 hours — up to 4 candidates
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('category', 'breaking-news')
@@ -103,11 +103,17 @@ export async function getFeaturedCandidates(topCategory, geoRegion = null) {
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('region', 'global')
       .order('views', { ascending: false }).limit(4),
-    // 5. Posts from user's detected geographic region — up to 5 candidates
+    // 5. Posts from user's detected geographic continent — up to 5 candidates
     geoRegion
       ? supabase.from('posts').select(SELECT)
           .eq('status', 'published').eq('region', geoRegion)
           .order('published_at', { ascending: false }).limit(5)
+      : Promise.resolve({ data: [] }),
+    // 6. Posts from user's most-read country — up to 5 candidates
+    topCountry
+      ? supabase.from('posts').select(SELECT)
+          .eq('status', 'published').eq('country_code', topCountry)
+          .order('views', { ascending: false }).order('published_at', { ascending: false }).limit(5)
       : Promise.resolve({ data: [] }),
   ])
 
@@ -117,6 +123,7 @@ export async function getFeaturedCandidates(topCategory, geoRegion = null) {
     fresh: freshRes.data || [],
     world: worldRes.data || [],
     geo: geoRes.data || [],
+    countryPosts: countryRes.data || [],
   }
 }
 

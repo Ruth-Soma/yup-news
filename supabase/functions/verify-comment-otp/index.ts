@@ -167,13 +167,25 @@ serve(async (req: Request) => {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function escHtml(str: string): string {
+  if (!str) return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 function notifyAdmin(name: string, content: string, adminEmail?: string, mailgunKey?: string) {
   if (!adminEmail || !mailgunKey) return
+  const safeName    = escHtml(name)
+  const safeContent = escHtml(content.substring(0, 300))
   const form = new FormData()
   form.append('from', 'YUP News <noreply@yup.ng>')
   form.append('to', adminEmail)
   form.append('subject', 'New comment on YUP News')
-  form.append('html', `<p><strong>${name}</strong> left a comment.</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#555">${content.substring(0, 300)}</blockquote><p><a href="https://yup.ng/admin/comments">View in admin →</a></p>`)
+  form.append('html', `<p><strong>${safeName}</strong> left a comment.</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#555">${safeContent}</blockquote><p><a href="https://yup.ng/admin/comments">View in admin →</a></p>`)
   fetch('https://api.mailgun.net/v3/mg.yup.ng/messages', {
     method: 'POST',
     headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },

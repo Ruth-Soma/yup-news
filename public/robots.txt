@@ -2,4 +2,8 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 
-Sitemap: https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/sitemap
+# Primary sitemap (all published articles + static pages)
+Sitemap: https://yup.ng/sitemap.xml
+
+# Google News sitemap (articles from the last 48 hours)
+Sitemap: https://yup.ng/google-news-sitemap.xml

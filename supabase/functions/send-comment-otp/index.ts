@@ -82,16 +82,20 @@ serve(async (req: Request) => {
       note: "If you didn't request this, you can safely ignore this email. Your comment will not be posted.",
     }))
 
-    const emailRes = await fetch('https://api.mailgun.net/v3/mg.yup.ng/messages', {
-      method: 'POST',
-      headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
-      body: form,
-    })
-
-    if (!emailRes.ok) {
+    // Try US then EU — mg.yup.ng may be registered in either Mailgun region
+    let emailSent = false
+    for (const base of ['https://api.mailgun.net', 'https://api.eu.mailgun.net']) {
+      const emailRes = await fetch(`${base}/v3/mg.yup.ng/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
+        body: form,
+      })
+      if (emailRes.ok) { emailSent = true; break }
       const errData = await emailRes.text()
-      throw new Error(`Email send failed: ${errData}`)
+      console.error(`send-comment-otp Mailgun ${base} error:`, errData)
+      if (emailRes.status === 401) throw new Error(`Mailgun auth failed: ${errData}`)
     }
+    if (!emailSent) throw new Error('Mailgun delivery failed on both US and EU endpoints')
 
     return json({ success: true, pending_id: pending.id }, 200)
 

@@ -19,6 +19,8 @@ export default function NewPost() {
   const [autoSavedAt, setAutoSavedAt] = useState(null)
   const [draftRestored, setDraftRestored] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [form, setForm] = useState({
     title: '',
     slug: '',
@@ -82,18 +84,34 @@ export default function NewPost() {
     return () => clearTimeout(timer)
   }, [form, autoSave])
 
+  const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    setUploadError('')
+
+    if (!ALLOWED_MIME.has(file.type)) {
+      setUploadError('Only JPEG, PNG, WebP and GIF images are allowed.')
+      e.target.value = ''
+      return
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError('Image must be under 5 MB.')
+      e.target.value = ''
+      return
+    }
+
     setUploading(true)
-    const ext = file.name.split('.').pop()
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }[file.type]
     const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('covers').upload(path, file, { upsert: false })
+    const { error } = await supabase.storage.from('covers').upload(path, file, { upsert: false, contentType: file.type })
     if (!error) {
       const { data } = supabase.storage.from('covers').getPublicUrl(path)
       setForm(f => ({ ...f, cover_image: data.publicUrl }))
     } else {
-      alert('Upload failed: ' + error.message)
+      setUploadError('Upload failed: ' + error.message)
     }
     setUploading(false)
     e.target.value = ''
@@ -114,7 +132,8 @@ export default function NewPost() {
   }
 
   async function handleSave(status) {
-    if (!form.title.trim()) return alert('Title is required')
+    setSaveError('')
+    if (!form.title.trim()) { setSaveError('Title is required.'); return }
     setSaving(true)
     const content = editor?.getHTML() || ''
     const tags = form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : []
@@ -132,7 +151,7 @@ export default function NewPost() {
 
     setSaving(false)
     if (error) {
-      alert('Error saving post: ' + error.message)
+      setSaveError('Error saving post: ' + error.message)
     } else {
       localStorage.removeItem(DRAFT_KEY)
       navigate(`/admin/posts/${data.id}`)
@@ -150,7 +169,10 @@ export default function NewPost() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {saveError && (
+            <p className="text-xs font-mono text-red-600">{saveError}</p>
+          )}
           <Button variant="secondary" onClick={() => handleSave('draft')} disabled={saving}>
             Save Draft
           </Button>
@@ -299,8 +321,11 @@ export default function NewPost() {
             <label className={`flex items-center gap-2 w-full border border-dashed border-border px-3 py-2 text-xs font-mono text-muted cursor-pointer hover:border-ink hover:text-ink transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
               <Upload size={13} />
               {uploading ? 'Uploading...' : 'Upload from device'}
-              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleImageUpload} disabled={uploading} />
             </label>
+            {uploadError && (
+              <p className="text-xs font-mono text-red-600">{uploadError}</p>
+            )}
             {form.cover_image && (
               <img src={form.cover_image} alt="Cover preview" className="w-full aspect-video object-cover mt-2" />
             )}

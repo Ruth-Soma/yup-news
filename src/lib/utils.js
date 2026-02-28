@@ -70,6 +70,14 @@ export const REGIONS = [
   { value: 'global',        label: 'World' },
 ]
 
+// Convert ISO 3166-1 alpha-2 code to flag emoji  e.g. "NG" → "🇳🇬"
+export function flagEmoji(code) {
+  if (!code || code.length !== 2) return ''
+  return Array.from(code.toUpperCase())
+    .map(c => String.fromCodePoint(c.charCodeAt(0) + 0x1F1A5))
+    .join('')
+}
+
 export const CATEGORIES = [
   { value: 'breaking-news', label: 'Breaking' },
   { value: 'politics', label: 'Politics' },

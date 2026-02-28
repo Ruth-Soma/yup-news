@@ -14,6 +14,26 @@
     <meta name="theme-color" content="#0A0A0A" />
     <title>YUP — Breaking News</title>
     <meta name="description" content="YUP — Your daily source for breaking news from the US, Nigeria, and around the world." />
+    <!-- Google Analytics GA4 — only loads when VITE_GA_ID is set -->
+    <script>
+      (function() {
+        var id = '%VITE_GA_ID%';
+        if (!id) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', id, { anonymize_ip: true });
+      })();
+    </script>
+    <!-- Preconnect to speed up first-party API calls -->
+    <link rel="preconnect" href="https://clxwyydoeodozndyfkkv.supabase.co" />
+    <link rel="dns-prefetch" href="https://clxwyydoeodozndyfkkv.supabase.co" />
+    <!-- Preconnect for fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

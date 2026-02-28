@@ -6,6 +6,17 @@
 const SITE_URL = 'https://yup.ng'
 const BRAND    = 'yup'
 
+/** Escape HTML special chars — prevents XSS when embedding DB/user content in email HTML */
+function escHtml(str: string): string {
+  if (!str) return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 // ─── Base wrapper ─────────────────────────────────────────────────────────────
 
 function base(content: string, previewText = ''): string {
@@ -162,16 +173,16 @@ export function newsletterEmail(opts: {
     <td style="background-color:#ffffff;padding:0;">
       ${lead.cover_image ? `
       <a href="${SITE_URL}/post/${lead.slug}" style="display:block;text-decoration:none;">
-        <img src="${lead.cover_image}" alt="${lead.title}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0;" />
+        <img src="${lead.cover_image}" alt="${escHtml(lead.title)}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0;" />
       </a>` : ''}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="padding:32px 36px 28px;">
             <p style="font-family:Arial,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#999;margin:0 0 14px;">${categoryLabel(lead.category)}</p>
             <a href="${SITE_URL}/post/${lead.slug}" style="text-decoration:none;">
-              <h2 style="font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#1a1a1a;margin:0 0 12px;line-height:1.18;letter-spacing:-0.02em;">${lead.title}</h2>
+              <h2 style="font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#1a1a1a;margin:0 0 12px;line-height:1.18;letter-spacing:-0.02em;">${escHtml(lead.title)}</h2>
             </a>
-            ${lead.excerpt ? `<p style="font-family:Arial,sans-serif;font-size:14px;color:#555;margin:0 0 20px;line-height:1.7;">${lead.excerpt}</p>` : ''}
+            ${lead.excerpt ? `<p style="font-family:Arial,sans-serif;font-size:14px;color:#555;margin:0 0 20px;line-height:1.7;">${escHtml(lead.excerpt)}</p>` : ''}
             <a href="${SITE_URL}/post/${lead.slug}" style="display:inline-block;background-color:#1a1a1a;color:#f0ede6;font-family:Arial,sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;text-decoration:none;padding:11px 22px;">Read Full Story →</a>
           </td>
         </tr>
@@ -189,13 +200,13 @@ export function newsletterEmail(opts: {
           <td width="50%" valign="top" style="padding:28px ${i === 0 ? '20px 20px 20px 0' : '0 0 20px 20px'};">
             ${post.cover_image ? `
             <a href="${SITE_URL}/post/${post.slug}" style="display:block;text-decoration:none;margin-bottom:14px;">
-              <img src="${post.cover_image}" alt="${post.title}" width="248" style="width:100%;height:auto;display:block;border:0;" />
+              <img src="${post.cover_image}" alt="${escHtml(post.title)}" width="248" style="width:100%;height:auto;display:block;border:0;" />
             </a>` : ''}
             <p style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#999;margin:0 0 8px;">${categoryLabel(post.category)}</p>
             <a href="${SITE_URL}/post/${post.slug}" style="text-decoration:none;">
-              <h3 style="font-family:Georgia,serif;font-size:16px;font-weight:bold;color:#1a1a1a;margin:0 0 8px;line-height:1.3;letter-spacing:-0.01em;">${post.title}</h3>
+              <h3 style="font-family:Georgia,serif;font-size:16px;font-weight:bold;color:#1a1a1a;margin:0 0 8px;line-height:1.3;letter-spacing:-0.01em;">${escHtml(post.title)}</h3>
             </a>
-            ${post.excerpt ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#777;margin:0;line-height:1.6;">${post.excerpt.substring(0, 100)}${post.excerpt.length > 100 ? '…' : ''}</p>` : ''}
+            ${post.excerpt ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#777;margin:0;line-height:1.6;">${escHtml(post.excerpt.substring(0, 100))}${post.excerpt.length > 100 ? '…' : ''}</p>` : ''}
           </td>`).join('<td width="1" style="background-color:#e2dfd7;font-size:0;line-height:0;">&nbsp;</td>')}
         </tr>
       </table>
@@ -215,14 +226,14 @@ export function newsletterEmail(opts: {
                 <td valign="top" style="padding-right:16px;">
                   <p style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#999;margin:0 0 6px;">${categoryLabel(post.category)}</p>
                   <a href="${SITE_URL}/post/${post.slug}" style="text-decoration:none;">
-                    <h4 style="font-family:Georgia,serif;font-size:15px;font-weight:bold;color:#1a1a1a;margin:0 0 5px;line-height:1.35;letter-spacing:-0.01em;">${post.title}</h4>
+                    <h4 style="font-family:Georgia,serif;font-size:15px;font-weight:bold;color:#1a1a1a;margin:0 0 5px;line-height:1.35;letter-spacing:-0.01em;">${escHtml(post.title)}</h4>
                   </a>
-                  ${post.source_name ? `<p style="font-family:Arial,sans-serif;font-size:11px;color:#aaa;margin:0;">${post.source_name}</p>` : ''}
+                  ${post.source_name ? `<p style="font-family:Arial,sans-serif;font-size:11px;color:#aaa;margin:0;">${escHtml(post.source_name)}</p>` : ''}
                 </td>
                 ${post.cover_image ? `
                 <td valign="top" width="88" style="flex-shrink:0;">
                   <a href="${SITE_URL}/post/${post.slug}" style="display:block;text-decoration:none;">
-                    <img src="${post.cover_image}" alt="${post.title}" width="88" height="60" style="width:88px;height:60px;object-fit:cover;display:block;border:0;" />
+                    <img src="${post.cover_image}" alt="${escHtml(post.title)}" width="88" height="60" style="width:88px;height:60px;object-fit:cover;display:block;border:0;" />
                   </a>
                 </td>` : ''}
               </tr>

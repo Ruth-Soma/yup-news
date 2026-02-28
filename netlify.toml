@@ -2,6 +2,7 @@
   command = "npm run build"
   publish = "dist"
 
+# ─── Security headers ──────────────────────────────────────────────────────────
 [[headers]]
   for = "/*"
   [headers.values]
@@ -10,6 +11,27 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
+# Long-lived cache for hashed static assets (Vite appends content hash to filenames)
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ─── Sitemap proxy ─────────────────────────────────────────────────────────────
+# Serve both sitemaps from the yup.ng domain so robots.txt uses canonical URLs
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/google-news-sitemap.xml"
+  to = "https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/google-news-sitemap"
+  status = 200
+  force = true
+
+# ─── SPA fallback (must be last) ───────────────────────────────────────────────
 [[redirects]]
   from = "/*"
   to = "/index.html"

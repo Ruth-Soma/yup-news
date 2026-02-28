@@ -396,7 +396,10 @@ export default function Home() {
 
   return (
     <>
-      <SEO description="Breaking news from the US, China, and around the world — updated every 30 minutes." />
+      <SEO
+        description="Breaking news from the US, China, and around the world — updated every 30 minutes."
+        isHomepage
+      />
       <Header />
 
       <main className="px-6 md:px-12 max-w-[1200px] mx-auto">

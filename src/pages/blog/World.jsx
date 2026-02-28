@@ -4,7 +4,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import SEO from '@/components/ui/SEO'
 import { getPosts, getPopularPosts } from '@/lib/queries'
-import { timeAgo, placeholderImage } from '@/lib/utils'
+import { timeAgo, placeholderImage, flagEmoji } from '@/lib/utils'
 
 const REGION_LABEL = {
   us:            'United States',
@@ -48,11 +48,20 @@ function PopularCard({ post, rank }) {
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 mb-1.5">
+      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
         <span className="text-[0.58rem] font-mono uppercase tracking-[0.12em] text-g400">
           {post.category?.replace(/-/g, ' ')}
         </span>
-        {post.region && post.region !== 'global' && (
+        {post.country && (
+          <>
+            <span className="text-g300">·</span>
+            <span className="text-[0.58rem] font-mono text-g500 flex items-center gap-1">
+              {flagEmoji(post.country_code)}
+              {post.country}
+            </span>
+          </>
+        )}
+        {!post.country && post.region && post.region !== 'global' && (
           <>
             <span className="text-g300">·</span>
             <span className="text-[0.58rem] font-mono uppercase tracking-[0.08em] text-g400">
@@ -123,8 +132,19 @@ function ContinentSection({ continent, posts }) {
             onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderImage(lead.category) }}
           />
         </div>
-        <div className="text-[0.6rem] font-mono uppercase tracking-[0.12em] text-g400 mb-1">
-          {lead.category?.replace(/-/g, ' ')}
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-[0.6rem] font-mono uppercase tracking-[0.12em] text-g400">
+            {lead.category?.replace(/-/g, ' ')}
+          </span>
+          {lead.country && (
+            <>
+              <span className="text-g300 text-[0.55rem]">·</span>
+              <span className="text-[0.6rem] font-mono text-g500 flex items-center gap-1">
+                {flagEmoji(lead.country_code)}
+                {lead.country}
+              </span>
+            </>
+          )}
         </div>
         <h3 className="font-serif font-bold text-[0.98rem] leading-[1.3] tracking-[-0.01em] text-ink group-hover:opacity-70 transition-opacity line-clamp-2">
           {lead.title}
@@ -138,8 +158,19 @@ function ContinentSection({ continent, posts }) {
             <li key={post.id}>
               <Link to={`/post/${post.slug}`} className="group flex items-start gap-3 py-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[0.55rem] font-mono uppercase tracking-[0.1em] text-g400 mb-0.5">
-                    {post.category?.replace(/-/g, ' ')}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <span className="text-[0.55rem] font-mono uppercase tracking-[0.1em] text-g400">
+                      {post.category?.replace(/-/g, ' ')}
+                    </span>
+                    {post.country && (
+                      <>
+                        <span className="text-g300 text-[0.5rem]">·</span>
+                        <span className="text-[0.55rem] font-mono text-g500 flex items-center gap-0.5">
+                          {flagEmoji(post.country_code)}
+                          {post.country}
+                        </span>
+                      </>
+                    )}
                   </div>
                   <p className="font-sans font-medium text-[0.83rem] leading-[1.35] text-ink group-hover:opacity-70 transition-opacity line-clamp-2">
                     {post.title}

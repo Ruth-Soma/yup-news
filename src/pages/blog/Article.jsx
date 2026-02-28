@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import DOMPurify from 'dompurify'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ShareButtons from '@/components/blog/ShareButtons'
@@ -9,6 +10,15 @@ import { BreakingBadge } from '@/components/ui/Badge'
 import { getPostBySlug, getRelatedPosts, getMoreFromCategory, incrementPostViews, getComments, addComment, getLikeCount, toggleLike, hasLiked } from '@/lib/queries'
 import { formatDate, readingTime, placeholderImage, timeAgo } from '@/lib/utils'
 import { useBookmarks } from '@/hooks/useBookmarks'
+
+// Allowed HTML tags and attributes for article body (whitelist only journalism markup)
+const PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['p', 'h2', 'h3', 'h4', 'strong', 'em', 'b', 'i', 'a', 'ul', 'ol', 'li',
+                 'blockquote', 'br', 'figure', 'figcaption', 'img', 'span'],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'title', 'width', 'height'],
+  ALLOW_DATA_ATTR: false,
+  FORCE_HTTPS: true,
+}
 
 const COMMENTER_KEY = 'yup_commenter'
 
@@ -98,12 +108,19 @@ export default function Article() {
         } catch {
           incrementPostViews(data.id)
         }
-        // Track category interest in localStorage
+        // Track category interest
         try {
-          const key = 'yup_interests'
-          const interests = JSON.parse(localStorage.getItem(key) || '{}')
+          const interests = JSON.parse(localStorage.getItem('yup_interests') || '{}')
           interests[data.category] = (interests[data.category] || 0) + 1
-          localStorage.setItem(key, JSON.stringify(interests))
+          localStorage.setItem('yup_interests', JSON.stringify(interests))
+        } catch {}
+        // Track country interest (for country-level recommendations)
+        try {
+          if (data.country_code) {
+            const ci = JSON.parse(localStorage.getItem('yup_country_interests') || '{}')
+            ci[data.country_code] = (ci[data.country_code] || 0) + 1
+            localStorage.setItem('yup_country_interests', JSON.stringify(ci))
+          }
         } catch {}
         getRelatedPosts(data.category, data.slug).then(({ data: rel }) => {
           setRelated(rel || [])
@@ -308,6 +325,11 @@ export default function Article() {
         url={`/post/${post.slug}`}
         type="article"
         article={post}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: post.category?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'News', url: `/category/${post.category}` },
+          { name: post.title, url: `/post/${post.slug}` },
+        ]}
       />
       <Header />
 
@@ -369,7 +391,7 @@ export default function Article() {
             {/* Body */}
             <div
               className="article-body"
-              dangerouslySetInnerHTML={{ __html: post.content }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content, PURIFY_CONFIG) }}
             />
 
             {/* Source attribution — text credit only, no outbound link */}

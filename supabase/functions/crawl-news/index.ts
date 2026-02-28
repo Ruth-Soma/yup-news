@@ -119,8 +119,17 @@ serve(async (req: Request) => {
       const aiResult = await rewriteWithAI(item.title, sourceText, logs)
       if (!aiResult) continue
 
-      // Image: RSS → loremflickr (skip slow AI image gen during bulk fill)
-      const coverImage = item.image || buildFallbackImage(aiResult.image_query, slug)
+      // Image: RSS image → Pexels keyword search → loremflickr fallback
+      let coverImage: string | null = item.image || null
+      if (!coverImage && aiResult.image_query) {
+        const pexelsKey = Deno.env.get('PEXELS_API_KEY')
+        if (pexelsKey) {
+          coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
+        }
+      }
+      if (!coverImage) {
+        coverImage = buildFallbackImage(aiResult.image_query, slug)
+      }
 
       const { error: insertError } = await supabase.from('posts').insert({
         title: aiResult.title || item.title,
@@ -130,6 +139,8 @@ serve(async (req: Request) => {
         cover_image: coverImage,
         category: feed.category || 'world',
         region: feed.region || 'global',
+        country: aiResult.country || null,
+        country_code: aiResult.country_code || null,
         tags: aiResult.tags || [],
         source_url: item.link || null,
         source_name: feed.name,
@@ -144,6 +155,26 @@ serve(async (req: Request) => {
         newPostsCount++
         seenTitles.push(aiResult.title || item.title)
         logs.push(`Published: ${(aiResult.title || item.title).substring(0, 60)}`)
+
+        // Fire-and-forget social media post (non-blocking — don't let failures stop crawl)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const supabaseAnon = Deno.env.get('SUPABASE_ANON_KEY')
+        if (supabaseUrl && supabaseAnon) {
+          fetch(`${supabaseUrl}/functions/v1/post-to-social`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${supabaseAnon}`,
+            },
+            body: JSON.stringify({
+              title: aiResult.title || item.title,
+              slug,
+              excerpt: aiResult.excerpt || '',
+              category: feed.category || 'world',
+              cover_image: coverImage || '',
+            }),
+          }).catch(() => {}) // ignore errors — social posting is best-effort
+        }
       } else {
         logs.push(`Insert error: ${insertError.message}`)
       }
@@ -284,7 +315,9 @@ Return this exact JSON:
   "seo_title": "Primary keyword + topic, max 60 chars",
   "seo_description": "Compelling meta description with keyword, max 155 chars",
   "tags": ["tag1", "tag2", "tag3"],
-  "image_query": "2-3 comma-separated keywords for a relevant news photo"
+  "image_query": "2-3 comma-separated keywords for a relevant news photo",
+  "country": "Full country name this story is PRIMARILY about (null if global/unclear)",
+  "country_code": "ISO 3166-1 alpha-2 code e.g. NG, US, GB, ZA (null if global/unclear)"
 }`
 
   try {
@@ -358,6 +391,32 @@ function slugToLock(str: string): number {
   let h = 0
   for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0
   return Math.abs(h) % 9999 + 1
+}
+
+// ─── PEXELS IMAGE SEARCH ──────────────────────────────────────────────────────
+
+async function fetchPexelsImage(query: string, apiKey: string, logs: string[]): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape`,
+      {
+        headers: { Authorization: apiKey },
+        signal: AbortSignal.timeout(5000),
+      }
+    )
+    if (!res.ok) { logs.push(`Pexels ${res.status}`); return null }
+    const data = await res.json()
+    const photos: any[] = data.photos || []
+    if (!photos.length) return null
+    // Pick randomly from top 5 results — prevents every article on same topic using identical photo
+    const photo = photos[Math.floor(Math.random() * Math.min(photos.length, 5))]
+    const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
+    if (url) logs.push(`Pexels image: ${url.substring(0, 60)}`)
+    return url
+  } catch (e: any) {
+    logs.push(`Pexels error: ${e.message}`)
+    return null
+  }
 }
 
 function buildFallbackImage(imageQuery: string | undefined, slug: string): string | null {

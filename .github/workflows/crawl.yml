@@ -1,0 +1,24 @@
+name: News Crawler
+
+on:
+  schedule:
+    # Runs every 30 minutes — keeps content fresh around the clock
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # allow manual trigger from GitHub Actions UI
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crawl and publish new articles
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/crawl-news")
+          cat /tmp/response.json
+          if [ "$response" -ne 200 ]; then
+            echo "Crawl failed with HTTP $response"
+            exit 1
+          fi

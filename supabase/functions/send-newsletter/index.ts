@@ -90,19 +90,22 @@ serve(async (req: Request) => {
           form.append('subject', `Your YUP Daily Briefing — ${date}`)
           form.append('html', html)
 
-          const res = await fetch('https://api.mailgun.net/v3/mg.yup.ng/messages', {
-            method: 'POST',
-            headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
-            body: form,
-          })
-
-          if (res.ok) {
-            sentCount++
-          } else {
-            failedCount++
+          // Try US then EU — mg.yup.ng may be registered in either Mailgun region
+          let sent = false
+          for (const base of ['https://api.mailgun.net', 'https://api.eu.mailgun.net']) {
+            const res = await fetch(`${base}/v3/mg.yup.ng/messages`, {
+              method: 'POST',
+              headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
+              body: form,
+            })
+            if (res.ok) { sent = true; break }
             const errText = await res.text()
-            logs.push(`Failed ${sub.email}: ${errText.substring(0, 80)}`)
+            console.error(`newsletter Mailgun ${base} error for ${sub.email}:`, errText)
+            if (res.status === 401) throw new Error(`Mailgun auth failed: ${errText}`)
+            // Only log on final attempt (EU)
+            if (base.includes('eu.mailgun')) logs.push(`Failed ${sub.email}: ${errText.substring(0, 80)}`)
           }
+          if (sent) { sentCount++ } else { failedCount++ }
         })
       )
 

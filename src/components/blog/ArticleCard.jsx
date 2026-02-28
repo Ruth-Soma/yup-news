@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { timeAgo, readingTime } from '@/lib/utils'
+import { timeAgo, readingTime, flagEmoji } from '@/lib/utils'
 
 export default function ArticleCard({ post, className = 'px-px' }) {
   return (
@@ -8,8 +8,19 @@ export default function ArticleCard({ post, className = 'px-px' }) {
       className={`group flex items-start justify-between py-6 border-b border-g200 hover:bg-g100 transition-colors gap-6 -mx-px ${className}`}
     >
       <div className="flex-1 min-w-0">
-        <div className="text-[0.62rem] font-mono uppercase tracking-[0.14em] text-g400 mb-2">
-          {post.category?.replace(/-/g, ' ')}
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[0.62rem] font-mono uppercase tracking-[0.14em] text-g400">
+            {post.category?.replace(/-/g, ' ')}
+          </span>
+          {post.country && (
+            <>
+              <span className="text-g300 text-[0.55rem]">·</span>
+              <span className="text-[0.62rem] font-mono text-g500 flex items-center gap-1">
+                {flagEmoji(post.country_code)}
+                {post.country}
+              </span>
+            </>
+          )}
         </div>
         <h3 className="font-serif font-bold text-[1.1rem] leading-[1.28] tracking-[-0.01em] text-ink mb-1.5 group-hover:opacity-75 transition-opacity line-clamp-2">
           {post.title}

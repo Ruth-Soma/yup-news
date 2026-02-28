@@ -18,6 +18,10 @@ export default function Category() {
         title={title}
         description={`Latest ${title} news from YUP — breaking stories updated every 30 minutes.`}
         url={`/category/${slug}`}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: title, url: `/category/${slug}` },
+        ]}
       />
       <Header />
 
