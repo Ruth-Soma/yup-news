@@ -371,11 +371,30 @@ function extractTag(xml: string, tag: string): string {
   return normal ? normal[1].trim() : ''
 }
 
+// Domains known to block hotlinking or require auth — images show as black/broken
+const BLOCKED_IMAGE_DOMAINS = [
+  'cdn.i-scmp.com',
+  'www.ft.com',
+  'ft.com',
+  'www.wsj.com',
+  'wsj.com',
+  'bloomberg.com',
+  'www.bloomberg.com',
+]
+
+function isBlockedImage(url: string): boolean {
+  try {
+    const domain = new URL(url).hostname
+    return BLOCKED_IMAGE_DOMAINS.includes(domain)
+  } catch { return false }
+}
+
 function extractImage(xml: string): string | null {
   const media = xml.match(/url="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i)
-  if (media) return media[1]
+  if (media && !isBlockedImage(media[1])) return media[1]
   const src = xml.match(/src="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i)
-  return src ? src[1] : null
+  if (src && !isBlockedImage(src[1])) return src[1]
+  return null
 }
 
 function cleanText(text: string): string {

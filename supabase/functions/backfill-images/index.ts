@@ -24,12 +24,12 @@ serve(async (req: Request) => {
     return json({ error: 'PEXELS_API_KEY not configured' }, 400)
   }
 
-  // Fetch articles that have null or loremflickr images
+  // Fetch articles that have null, loremflickr, or hotlink-blocked images
   const { data: posts, error } = await supabase
     .from('posts')
     .select('id, title, category, tags, country')
     .eq('status', 'published')
-    .or('cover_image.is.null,cover_image.like.%loremflickr%')
+    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%')
     .order('published_at', { ascending: false })
     .limit(limit)
 
@@ -73,7 +73,7 @@ serve(async (req: Request) => {
     .from('posts')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'published')
-    .or('cover_image.is.null,cover_image.like.%loremflickr%')
+    .or('cover_image.is.null,cover_image.like.%loremflickr%,cover_image.like.%cdn.i-scmp.com%,cover_image.like.%ft.com/__origami%,cover_image.like.%wsj.com%,cover_image.like.%bloomberg.com%')
 
   return json({ done: (remaining || 0) === 0, updated, failed, remaining: remaining || 0, logs }, 200)
 })
