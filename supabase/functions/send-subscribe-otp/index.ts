@@ -9,39 +9,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Try Resend first, then Mailgun US, then Mailgun EU
+// Try Mailgun US endpoint, then EU endpoint as fallback
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  const resendKey = Deno.env.get('RESEND_API_KEY')
   const mailgunKey = Deno.env.get('MAILGUN_API_KEY')
+  if (!mailgunKey) throw new Error('MAILGUN_API_KEY not configured')
 
-  if (resendKey) {
-    const res = await fetch('https://api.resend.com/emails', {
+  const form = new FormData()
+  form.append('from', 'YUP News <newsletter@yup.ng>')
+  form.append('to', to)
+  form.append('subject', subject)
+  form.append('html', html)
+
+  // Try US then EU Mailgun region
+  for (const base of ['https://api.mailgun.net', 'https://api.eu.mailgun.net']) {
+    const res = await fetch(`${base}/v3/mg.yup.ng/messages`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'YUP News <newsletter@yup.ng>', to, subject, html }),
+      headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
+      body: form,
     })
     if (res.ok) return
-    console.warn('Resend failed:', await res.text())
+    const errText = await res.text()
+    console.error(`Mailgun ${base} error:`, errText)
+    // Only try EU if US returns a domain/routing error (not auth)
+    if (res.status === 401 || res.status === 403) throw new Error(`Mailgun auth failed: ${errText}`)
   }
-
-  if (mailgunKey) {
-    for (const base of ['https://api.mailgun.net', 'https://api.eu.mailgun.net']) {
-      const form = new FormData()
-      form.append('from', 'YUP News <newsletter@yup.ng>')
-      form.append('to', to)
-      form.append('subject', subject)
-      form.append('html', html)
-      const res = await fetch(`${base}/v3/mg.yup.ng/messages`, {
-        method: 'POST',
-        headers: { Authorization: `Basic ${btoa('api:' + mailgunKey)}` },
-        body: form,
-      })
-      if (res.ok) return
-      console.warn(`Mailgun ${base} failed:`, await res.text())
-    }
-  }
-
-  throw new Error('All email delivery methods failed.')
+  throw new Error('Mailgun failed on both US and EU endpoints')
 }
 
 serve(async (req: Request) => {

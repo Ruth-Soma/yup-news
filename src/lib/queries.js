@@ -79,11 +79,11 @@ export async function getMostReadPosts() {
   return { data, error }
 }
 
-export async function getFeaturedCandidates(topCategory) {
+export async function getFeaturedCandidates(topCategory, geoRegion = null) {
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
   const SELECT = 'id, title, slug, excerpt, cover_image, category, region, source_name, views, published_at'
 
-  const [breakingRes, relatedRes, freshRes, worldRes] = await Promise.all([
+  const [breakingRes, relatedRes, freshRes, worldRes, geoRes] = await Promise.all([
     // 1. Breaking news in the last 6 hours — up to 4 candidates
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('category', 'breaking-news')
@@ -103,6 +103,12 @@ export async function getFeaturedCandidates(topCategory) {
     supabase.from('posts').select(SELECT)
       .eq('status', 'published').eq('region', 'global')
       .order('views', { ascending: false }).limit(4),
+    // 5. Posts from user's detected geographic region — up to 5 candidates
+    geoRegion
+      ? supabase.from('posts').select(SELECT)
+          .eq('status', 'published').eq('region', geoRegion)
+          .order('published_at', { ascending: false }).limit(5)
+      : Promise.resolve({ data: [] }),
   ])
 
   return {
@@ -110,6 +116,7 @@ export async function getFeaturedCandidates(topCategory) {
     related: relatedRes.data || [],
     fresh: freshRes.data || [],
     world: worldRes.data || [],
+    geo: geoRes.data || [],
   }
 }
 
