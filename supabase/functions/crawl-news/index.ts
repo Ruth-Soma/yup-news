@@ -15,8 +15,8 @@ serve(async (req: Request) => {
   let newPostsCount = 0
   let skippedCount = 0
   let aiCallsThisRun = 0
-  const MAX_AI_CALLS = 8
-  const ITEMS_PER_FEED = 10
+  const MAX_AI_CALLS = 5
+  const ITEMS_PER_FEED = 6
 
   try {
     // 1. Fetch active feeds
@@ -76,8 +76,32 @@ serve(async (req: Request) => {
 
     logs.push(`${candidates.length} candidates after dedup (${skippedCount} skipped)`)
 
-    // 5. Process candidates sequentially with AI, up to MAX_AI_CALLS
-    for (const { feed, item, slug } of candidates) {
+    // 5. Score and sort candidates — best stories first
+    function qualityScore(item: RSSItem): number {
+      let score = 0
+      // Reward longer, meatier descriptions
+      score += Math.min(item.description?.length || 0, 600) / 60      // 0–10 pts
+      // Reward having an image
+      if (item.image) score += 3
+      // Reward longer, specific titles (not vague clickbait stubs)
+      const titleWords = item.title.split(/\s+/).length
+      if (titleWords >= 8) score += 2
+      if (titleWords >= 12) score += 1
+      // Penalise very short descriptions (likely stub / ad / promo)
+      if ((item.description?.length || 0) < 80) score -= 5
+      // Penalise titles that look like section headers or promos
+      if (/^(watch|video|photos?|gallery|quiz|sponsored|advertisement)/i.test(item.title)) score -= 8
+      return score
+    }
+
+    const ranked = candidates
+      .filter(({ item }) => (item.description?.length || 0) >= 60)   // hard minimum
+      .sort((a, b) => qualityScore(b.item) - qualityScore(a.item))
+
+    logs.push(`${ranked.length} quality candidates after scoring`)
+
+    // 6. Process top candidates sequentially with AI, up to MAX_AI_CALLS
+    for (const { feed, item, slug } of ranked) {
       if (aiCallsThisRun >= MAX_AI_CALLS) {
         logs.push(`Reached ${MAX_AI_CALLS} AI call limit`)
         break
