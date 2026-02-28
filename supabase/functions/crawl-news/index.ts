@@ -120,9 +120,9 @@ serve(async (req: Request) => {
       if (!aiResult) continue
 
       // Image: RSS image → Pexels keyword search → loremflickr fallback
+      const pexelsKey = Deno.env.get('PEXELS_API_KEY')
       let coverImage: string | null = item.image || null
       if (!coverImage && aiResult.image_query) {
-        const pexelsKey = Deno.env.get('PEXELS_API_KEY')
         if (pexelsKey) {
           coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
         }
@@ -131,11 +131,24 @@ serve(async (req: Request) => {
         coverImage = buildFallbackImage(aiResult.image_query, slug)
       }
 
+      // Enrich article content: embed YouTube videos + inject inline Pexels images
+      const youtubeEmbed = extractYouTubeEmbed(fullContent)
+      let enrichedContent = aiResult.content || `<p>${item.description || item.title}</p>`
+      if (pexelsKey) {
+        enrichedContent = await injectInlineImages(
+          enrichedContent, aiResult.title || item.title,
+          aiResult.image_query || '', feed.category || 'world', pexelsKey, logs
+        )
+      }
+      if (youtubeEmbed) {
+        enrichedContent = injectVideoEmbed(enrichedContent, youtubeEmbed)
+      }
+
       const { error: insertError } = await supabase.from('posts').insert({
         title: aiResult.title || item.title,
         slug,
         excerpt: aiResult.excerpt || item.description?.substring(0, 200),
-        content: aiResult.content || `<p>${item.description || item.title}</p>`,
+        content: enrichedContent,
         cover_image: coverImage,
         category: feed.category || 'world',
         region: feed.region || 'global',
@@ -417,10 +430,10 @@ function slugToLock(str: string): number {
 
 // ─── PEXELS IMAGE SEARCH ──────────────────────────────────────────────────────
 
-async function fetchPexelsImage(query: string, apiKey: string, logs: string[]): Promise<string | null> {
+async function fetchPexelsImage(query: string, apiKey: string, logs: string[], usedUrls?: Set<string>): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&orientation=landscape`,
       {
         headers: { Authorization: apiKey },
         signal: AbortSignal.timeout(5000),
@@ -430,11 +443,18 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[]): 
     const data = await res.json()
     const photos: any[] = data.photos || []
     if (!photos.length) return null
-    // Pick randomly from top 5 results — prevents every article on same topic using identical photo
-    const photo = photos[Math.floor(Math.random() * Math.min(photos.length, 5))]
-    const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
-    if (url) logs.push(`Pexels image: ${url.substring(0, 60)}`)
-    return url
+    // Pick from top results, skipping already-used URLs to avoid duplicates in same article
+    const candidates = photos.slice(0, Math.min(photos.length, 10))
+    for (const photo of candidates) {
+      const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
+      if (!url) continue
+      if (usedUrls && usedUrls.has(url)) continue
+      if (url) logs.push(`Pexels image: ${url.substring(0, 60)}`)
+      return url
+    }
+    // All top results used — just return the first one
+    const fallback = candidates[0]?.src?.large2x || candidates[0]?.src?.large || null
+    return fallback
   } catch (e: any) {
     logs.push(`Pexels error: ${e.message}`)
     return null
@@ -444,4 +464,92 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[]): 
 function buildFallbackImage(imageQuery: string | undefined, slug: string): string | null {
   if (!imageQuery) return null
   return `https://loremflickr.com/800/450/${encodeURIComponent(imageQuery.trim())}?lock=${slugToLock(slug)}`
+}
+
+// ─── YOUTUBE EXTRACTION ───────────────────────────────────────────────────────
+
+function extractYouTubeEmbed(html: string): string | null {
+  if (!html) return null
+  // Match youtube.com/watch?v=ID or youtu.be/ID or youtube.com/embed/ID
+  const match = html.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  )
+  if (!match) return null
+  const videoId = match[1]
+  return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`
+}
+
+function injectVideoEmbed(html: string, embedHtml: string): string {
+  // Insert video after the first h2 section, or after the second paragraph
+  const h2Idx = html.indexOf('</h2>')
+  if (h2Idx !== -1) {
+    // Find end of first paragraph after first h2
+    const pEnd = html.indexOf('</p>', h2Idx)
+    if (pEnd !== -1) {
+      return html.slice(0, pEnd + 4) + '\n' + embedHtml + html.slice(pEnd + 4)
+    }
+  }
+  // Fallback: after second </p>
+  let count = 0
+  let pos = 0
+  while (count < 2) {
+    const idx = html.indexOf('</p>', pos)
+    if (idx === -1) break
+    pos = idx + 4
+    count++
+  }
+  return html.slice(0, pos) + '\n' + embedHtml + html.slice(pos)
+}
+
+// ─── INLINE IMAGE INJECTION ───────────────────────────────────────────────────
+
+// Derive varied secondary queries from the primary image_query + title
+function buildSecondaryQuery(title: string, imageQuery: string, index: number): string {
+  const STOP = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+    'is','are','was','were','has','have','had','as','it','its','this','that','from','will','be',
+    'been','can','could','would','should','says','said','new','amid','just','over','after','before',
+    'about','into','how','why','what','when','where','who','which','during','than','us','uk'])
+
+  const titleWords = title.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)
+    .filter(w => w.length > 4 && !STOP.has(w))
+
+  // First inline image: use the primary image_query
+  if (index === 0) return imageQuery
+
+  // Second inline image: use different title keywords (offset by 2)
+  return titleWords.slice(2, 5).join(' ') || imageQuery
+}
+
+async function injectInlineImages(
+  html: string,
+  title: string,
+  imageQuery: string,
+  category: string,
+  pexelsKey: string,
+  logs: string[]
+): Promise<string> {
+  // Split content at <h2> boundaries
+  const sections = html.split(/(?=<h2[\s>])/i)
+  if (sections.length < 2) return html  // Too short to inject
+
+  // Inject one image after section 1 (after first h2 content), one after section 3 if it exists
+  const injectPoints = [1, 3].filter(i => i < sections.length)
+  const usedUrls = new Set<string>()
+
+  for (let j = 0; j < injectPoints.length; j++) {
+    const idx = injectPoints[j]
+    const query = buildSecondaryQuery(title, imageQuery, j)
+    const imgUrl = await fetchPexelsImage(query, pexelsKey, logs, usedUrls)
+    if (!imgUrl) continue
+    usedUrls.add(imgUrl)
+
+    const caption = query.split(' ').slice(0, 4).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    const figure = `\n<figure class="article-figure"><img src="${imgUrl}" alt="${caption}" loading="lazy"><figcaption>${caption}</figcaption></figure>\n`
+
+    // Insert figure at the END of this section (before the next <h2>)
+    sections[idx] = sections[idx] + figure
+    await new Promise(r => setTimeout(r, 200))
+  }
+
+  return sections.join('')
 }

@@ -14,10 +14,13 @@ import { useBookmarks } from '@/hooks/useBookmarks'
 // Allowed HTML tags and attributes for article body (whitelist only journalism markup)
 const PURIFY_CONFIG = {
   ALLOWED_TAGS: ['p', 'h2', 'h3', 'h4', 'strong', 'em', 'b', 'i', 'a', 'ul', 'ol', 'li',
-                 'blockquote', 'br', 'figure', 'figcaption', 'img', 'span'],
-  ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'title', 'width', 'height'],
+                 'blockquote', 'br', 'figure', 'figcaption', 'img', 'span', 'div', 'iframe'],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'title', 'width', 'height',
+                 'frameborder', 'allowfullscreen', 'allow', 'loading', 'referrerpolicy'],
   ALLOW_DATA_ATTR: false,
   FORCE_HTTPS: true,
+  ADD_TAGS: ['iframe'],
+  ADD_ATTR: ['allowfullscreen', 'allow', 'frameborder', 'referrerpolicy', 'loading'],
 }
 
 const COMMENTER_KEY = 'yup_commenter'
