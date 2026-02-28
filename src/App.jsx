@@ -18,6 +18,7 @@ import Region from '@/pages/blog/Region'
 import World from '@/pages/blog/World'
 import Search from '@/pages/blog/Search'
 import Tag from '@/pages/blog/Tag'
+import Market from '@/pages/blog/Market'
 import NotFound from '@/pages/NotFound'
 import NewsBanner from '@/components/ui/NewsBanner'
 
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/category/:slug" element={<Category />} />
           <Route path="/region/global" element={<World />} />
           <Route path="/region/:region" element={<Region />} />
+          <Route path="/markets" element={<Market />} />
           <Route path="/search" element={<Search />} />
           <Route path="/tag/:tag" element={<Tag />} />
 

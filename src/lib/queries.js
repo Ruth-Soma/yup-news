@@ -192,6 +192,23 @@ export async function incrementPostViews(postId, country = null, countryCode = n
   } catch { /* never block page load */ }
 }
 
+// ─── MARKET POSTS ─────────────────────────────────────────────────────────────
+// Fetches business + finance + breaking-news for the Markets page
+
+export async function getMarketPosts({ page = 1 } = {}) {
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+  const { data, error, count } = await supabase
+    .from('posts')
+    .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, tags, source_name, views, published_at, comments(count)', { count: 'exact' })
+    .eq('status', 'published')
+    .lte('published_at', new Date().toISOString())
+    .in('category', ['business', 'finance', 'breaking-news', 'politics'])
+    .order('published_at', { ascending: false })
+    .range(from, to)
+  return { data: data || [], error, count, totalPages: Math.ceil((count || 0) / PAGE_SIZE) }
+}
+
 export async function getViewsByCountry(daysBack = 30) {
   const { data, error } = await supabase.rpc('get_views_by_country', { days_back: daysBack })
   return { data: data || [], error }

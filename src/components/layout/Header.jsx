@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { to: '/region/china', label: 'China' },
   { to: '/category/technology', label: 'Technology' },
   { to: '/category/business', label: 'Business' },
-  { to: '/category/finance', label: 'Markets' },
+  { to: '/markets', label: 'Markets', highlight: true },
   { to: '/category/crypto', label: 'Crypto' },
   { to: '/category/politics', label: 'Politics' },
   { to: '/category/sports', label: 'Sports' },
@@ -207,19 +207,35 @@ export default function Header() {
         {/* Desktop center nav */}
         <nav className="hidden md:flex items-center gap-0">
           {NAV_ITEMS.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `text-[0.7rem] font-sans font-medium uppercase tracking-[0.12em] px-4 h-[60px] flex items-center transition-colors border-b-[2px] ${
-                  isActive
-                    ? 'text-ink border-ink'
-                    : 'text-g500 border-transparent hover:text-ink'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
+            item.highlight ? (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `text-[0.7rem] font-sans font-medium uppercase tracking-[0.12em] px-3 mx-1 h-8 flex items-center transition-all rounded-sm border-b-[2px] border-transparent ${
+                    isActive
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `text-[0.7rem] font-sans font-medium uppercase tracking-[0.12em] px-4 h-[60px] flex items-center transition-colors border-b-[2px] ${
+                    isActive
+                      ? 'text-ink border-ink'
+                      : 'text-g500 border-transparent hover:text-ink'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            )
           ))}
         </nav>
 
@@ -307,10 +323,17 @@ export default function Header() {
             <Link
               key={item.to}
               to={item.to}
-              className="block py-2.5 text-sm font-sans text-ink border-b border-g200 last:border-0"
+              className={`flex items-center justify-between py-2.5 text-sm font-sans border-b border-g200 last:border-0 ${
+                item.highlight ? 'text-emerald-700 font-medium' : 'text-ink'
+              }`}
               onClick={() => setMenuOpen(false)}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.highlight && (
+                <span className="text-[0.55rem] font-mono uppercase tracking-widest bg-emerald-100 text-emerald-700 px-1.5 py-0.5">
+                  Trader
+                </span>
+              )}
             </Link>
           ))}
           <Link
