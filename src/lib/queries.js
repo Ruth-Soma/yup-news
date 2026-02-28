@@ -165,8 +165,18 @@ export async function searchPosts(query, { category, region, page = 1 } = {}) {
   return { data, error, count, totalPages: Math.ceil((count || 0) / PAGE_SIZE) }
 }
 
-export async function incrementPostViews(postId) {
+export async function incrementPostViews(postId, country = null, countryCode = null) {
+  await supabase.from('page_views').insert({
+    post_id: postId,
+    country: country || null,
+    country_code: countryCode || null,
+  })
   await supabase.rpc('increment_views', { post_id: postId })
+}
+
+export async function getViewsByCountry(daysBack = 30) {
+  const { data, error } = await supabase.rpc('get_views_by_country', { days_back: daysBack })
+  return { data: data || [], error }
 }
 
 // ─── ADMIN POSTS ──────────────────────────────────────────────────────────────

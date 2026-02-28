@@ -91,7 +91,13 @@ export default function Article() {
         setNotFound(true)
       } else {
         setPost(data)
-        incrementPostViews(data.id)
+        // Pass country from geo session cache so views are attributed to locations
+        try {
+          const geo = JSON.parse(sessionStorage.getItem('yup_geo') || '{}')
+          incrementPostViews(data.id, geo.country || null, geo.countryCode || null)
+        } catch {
+          incrementPostViews(data.id)
+        }
         // Track category interest in localStorage
         try {
           const key = 'yup_interests'

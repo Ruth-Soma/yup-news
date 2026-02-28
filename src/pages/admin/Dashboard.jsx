@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 import StatsCard from '@/components/admin/StatsCard'
-import { getDashboardStats, getTopPostsByViews, getViewsOverTime } from '@/lib/queries'
+import { getDashboardStats, getTopPostsByViews, getViewsOverTime, getViewsByCountry } from '@/lib/queries'
 import { format, subDays } from 'date-fns'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ totalPosts: 0, viewsToday: 0, postsToday: 0, subscribers: 0 })
   const [topPosts, setTopPosts] = useState([])
   const [viewsData, setViewsData] = useState([])
+  const [locationData, setLocationData] = useState([])
   const [loading, setLoading] = useState(true)
   const [newsletterStatus, setNewsletterStatus] = useState('idle') // idle | sending | done | error
   const [newsletterMsg, setNewsletterMsg] = useState('')
@@ -24,7 +25,8 @@ export default function Dashboard() {
       getDashboardStats(),
       getTopPostsByViews(),
       getViewsOverTime(),
-    ]).then(([statsRes, topRes, viewsRes]) => {
+      getViewsByCountry(30),
+    ]).then(([statsRes, topRes, viewsRes, locRes]) => {
       setStats(statsRes)
       setTopPosts(topRes.data || [])
 
@@ -39,6 +41,7 @@ export default function Dashboard() {
         if (day) day.count++
       })
       setViewsData(days)
+      setLocationData(locRes.data || [])
       setLoading(false)
     })
   }, [])
@@ -139,6 +142,41 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Viewer Locations */}
+      <div className="bg-paper border border-border p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-serif font-bold text-lg text-ink">Viewer Locations</h3>
+          <span className="text-xs font-mono text-muted">Last 30 days</span>
+        </div>
+        {locationData.length === 0 ? (
+          <p className="text-xs font-mono text-muted py-4 text-center">
+            {loading ? 'Loading…' : 'No location data yet — views will appear here as readers visit from around the world.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {locationData.slice(0, 10).map((row, i) => {
+              const max = locationData[0]?.view_count || 1
+              const pct = Math.round((row.view_count / max) * 100)
+              return (
+                <div key={row.country_code + i} className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-muted w-5 text-right shrink-0">{i + 1}</span>
+                  <span className="text-xs font-sans text-ink w-32 shrink-0 truncate">{row.country}</span>
+                  <div className="flex-1 bg-g100 h-4 relative">
+                    <div
+                      className="h-4 bg-ink transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono text-muted w-10 text-right shrink-0">
+                    {Number(row.view_count).toLocaleString()}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Top posts table */}
