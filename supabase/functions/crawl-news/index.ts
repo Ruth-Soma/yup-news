@@ -15,7 +15,7 @@ serve(async (req: Request) => {
   let newPostsCount = 0
   let skippedCount = 0
   let aiCallsThisRun = 0
-  const MAX_AI_CALLS = 5
+  const MAX_AI_CALLS = 3
   const ITEMS_PER_FEED = 6
 
   try {
@@ -100,18 +100,21 @@ serve(async (req: Request) => {
 
     logs.push(`${ranked.length} quality candidates after scoring`)
 
-    // 6. Process top candidates sequentially with AI, up to MAX_AI_CALLS
-    for (const { feed, item, slug } of ranked) {
-      if (aiCallsThisRun >= MAX_AI_CALLS) {
-        logs.push(`Reached ${MAX_AI_CALLS} AI call limit`)
-        break
-      }
+    // 6. Pre-fetch full article content for top candidates in parallel
+    const topCandidates = ranked.slice(0, MAX_AI_CALLS)
+    const contentResults = await Promise.allSettled(
+      topCandidates.map(({ item }) => fetchFullContent(item.link, logs))
+    )
 
-      // Gap between AI calls to stay under rate limit
-      if (aiCallsThisRun > 0) await new Promise(r => setTimeout(r, 4500))
+    // 7. Process top candidates sequentially with AI
+    for (let i = 0; i < topCandidates.length; i++) {
+      const { feed, item, slug } = topCandidates[i]
+
+      // Short gap between AI calls to stay under rate limit
+      if (aiCallsThisRun > 0) await new Promise(r => setTimeout(r, 1500))
       aiCallsThisRun++
 
-      const fullContent = await fetchFullContent(item.link, logs)
+      const fullContent = contentResults[i].status === 'fulfilled' ? contentResults[i].value : ''
       const sourceText = fullContent || item.description || item.title
       const aiResult = await rewriteWithAI(item.title, sourceText, logs)
       if (!aiResult) continue
@@ -205,7 +208,7 @@ async function fetchFullContent(url: string, logs: string[]): Promise<string> {
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(4000),
     })
     if (!res.ok) return ''
     const html = await res.text()
