@@ -5,9 +5,10 @@
  *   1. GET /accounts from Late → find the connected Twitter account ID
  *   2. Query Supabase for the most recent breaking-news article in the past 24h
  *      that has NOT already been logged in tweet_log
- *   3. Build a ≤280-char tweet (title + excerpt if it fits + URL + hashtag)
- *   4. POST to Late API → publishNow: true
- *   5. Insert a row into tweet_log so it never gets re-tweeted
+ *   3. Upload the article's cover_image to Late's CDN (presigned URL flow)
+ *   4. Build a ≤280-char tweet (title + excerpt if it fits + URL + hashtag)
+ *   5. POST to Late API → publishNow: true, media: [{ url: publicUrl }]
+ *   6. Insert a row into tweet_log so it never gets re-tweeted
  *
  * Required Supabase secrets:
  *   LATE_KEY          — Late API key (sk_...)
@@ -20,11 +21,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const LATE_KEY    = Deno.env.get('LATE_KEY') ?? ''
-const SITE_URL    = Deno.env.get('SITE_URL') ?? 'https://yup.ng'
-const SB_URL      = Deno.env.get('SUPABASE_URL') ?? ''
-const SB_KEY      = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-const LATE_BASE   = 'https://getlate.dev/api/v1'
+const LATE_KEY  = Deno.env.get('LATE_KEY') ?? ''
+const SITE_URL  = Deno.env.get('SITE_URL') ?? 'https://yup.ng'
+const SB_URL    = Deno.env.get('SUPABASE_URL') ?? ''
+const SB_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const LATE_BASE = 'https://getlate.dev/api/v1'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +49,6 @@ serve(async (req: Request) => {
     }
 
     const accountsPayload = await accountsRes.json()
-    // Late may return { accounts: [...] } or directly [...]
     const accountsList: any[] = Array.isArray(accountsPayload)
       ? accountsPayload
       : (accountsPayload.accounts ?? accountsPayload.data ?? [])
@@ -75,7 +75,7 @@ serve(async (req: Request) => {
 
     const { data: posts, error: postsErr } = await supabase
       .from('posts')
-      .select('id, title, slug, excerpt, category')
+      .select('id, title, slug, excerpt, category, cover_image')
       .eq('category', 'breaking-news')
       .gte('published_at', since.toISOString())
       .order('published_at', { ascending: false })
@@ -83,31 +83,36 @@ serve(async (req: Request) => {
 
     if (postsErr) throw postsErr
 
-    // Take the first post not yet in tweet_log
     const post = (posts ?? []).find((p: any) => !alreadyPosted.has(String(p.id)))
 
     if (!post) {
       return json({ message: 'No new breaking-news posts to tweet in the last 24h', skipped: true }, 200)
     }
 
-    // ── 3. Build tweet ──────────────────────────────────────────────────────
+    // ── 3. Upload cover image to Late CDN ───────────────────────────────────
+    const mediaArr = await uploadCoverImage(post.cover_image)
+
+    // ── 4. Build tweet ──────────────────────────────────────────────────────
     const articleUrl = `${SITE_URL}/post/${post.slug}`
     const tweet = buildTweet(post.title, post.excerpt, articleUrl)
 
-    // ── 4. Post via Late ────────────────────────────────────────────────────
+    // ── 5. Post via Late ────────────────────────────────────────────────────
+    const postBody: Record<string, any> = {
+      content:     tweet,
+      publishNow:  true,
+      platforms:   [{ platform: 'twitter', accountId }],
+    }
+    if (mediaArr) postBody.media = mediaArr
+
     const postRes = await fetch(`${LATE_BASE}/posts`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${LATE_KEY}`,
+        Authorization:  `Bearer ${LATE_KEY}`,
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        Accept:         'application/json',
       },
-      body: JSON.stringify({
-        content: tweet,
-        publishNow: true,
-        platforms: [{ platform: 'twitter', accountId }],
-      }),
-      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify(postBody),
+      signal: AbortSignal.timeout(20000),
     })
 
     const postData = await postRes.json()
@@ -115,7 +120,7 @@ serve(async (req: Request) => {
       throw new Error(`Late POST /posts error ${postRes.status}: ${JSON.stringify(postData)}`)
     }
 
-    // ── 5. Log to tweet_log ─────────────────────────────────────────────────
+    // ── 6. Log to tweet_log ─────────────────────────────────────────────────
     await supabase.from('tweet_log').insert({
       post_id:      String(post.id),
       tweet_text:   tweet,
@@ -124,11 +129,12 @@ serve(async (req: Request) => {
     })
 
     return json({
-      success:      true,
-      slug:         post.slug,
+      success:    true,
+      slug:       post.slug,
       tweet,
-      twitterUrl:   postData.platformPostUrl ?? null,
-      latePostId:   postData._id ?? postData.id ?? null,
+      hasImage:   !!mediaArr,
+      twitterUrl: postData.platformPostUrl ?? null,
+      latePostId: postData._id ?? postData.id ?? null,
     }, 200)
 
   } catch (err: any) {
@@ -137,28 +143,101 @@ serve(async (req: Request) => {
   }
 })
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Image upload ──────────────────────────────────────────────────────────────
 
 /**
- * Builds a tweet that fits within 280 characters.
- * Twitter always wraps URLs to 23 chars (t.co), so we budget accordingly.
+ * Uploads the article's cover image to Late's CDN via presigned URL.
+ * Returns a media array ready for the Late post body, or null if anything fails.
+ * Failure is non-fatal — tweet will still be sent without an image.
+ */
+async function uploadCoverImage(coverImageUrl: string | null | undefined): Promise<any[] | null> {
+  if (!coverImageUrl) return null
+
+  try {
+    // Step 1 — download the image
+    const imgRes = await fetch(coverImageUrl, {
+      headers: { 'User-Agent': 'YUP-NewsBot/1.0' },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!imgRes.ok) {
+      console.warn(`[image] Failed to fetch cover image (${imgRes.status}): ${coverImageUrl}`)
+      return null
+    }
+
+    const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg'
+    // Only upload supported image types
+    if (!contentType.startsWith('image/')) {
+      console.warn(`[image] Unsupported content-type: ${contentType}`)
+      return null
+    }
+
+    const ext = contentType.includes('png')  ? 'png'
+              : contentType.includes('gif')  ? 'gif'
+              : contentType.includes('webp') ? 'webp'
+              : 'jpg'
+    const filename = `news-${Date.now()}.${ext}`
+    const imgBytes = await imgRes.arrayBuffer()
+
+    // Step 2 — get Late presigned upload URL (POST /api/v1/media/presign)
+    const presignedRes = await fetch(`${LATE_BASE}/media/presign`, {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${LATE_KEY}`,
+        'Content-Type': 'application/json',
+        Accept:         'application/json',
+      },
+      body: JSON.stringify({ filename, contentType }),
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!presignedRes.ok) {
+      console.warn(`[image] Presigned URL error (${presignedRes.status})`)
+      return null
+    }
+
+    const { uploadUrl, publicUrl } = await presignedRes.json()
+    if (!uploadUrl || !publicUrl) {
+      console.warn('[image] Presigned response missing uploadUrl or publicUrl')
+      return null
+    }
+
+    // Step 3 — PUT the image bytes to the presigned URL
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: imgBytes,
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!uploadRes.ok) {
+      console.warn(`[image] S3 PUT failed (${uploadRes.status})`)
+      return null
+    }
+
+    console.log(`[image] Uploaded successfully → ${publicUrl}`)
+    return [{ url: publicUrl }]
+
+  } catch (err: any) {
+    console.warn(`[image] Upload skipped: ${err.message}`)
+    return null
+  }
+}
+
+// ─── Tweet builder ─────────────────────────────────────────────────────────────
+
+/**
+ * Builds a tweet ≤280 chars.
+ * Twitter t.co wraps all URLs to exactly 23 chars.
  */
 function buildTweet(title: string, excerpt: string | undefined, url: string): string {
   const hashtag   = '#BreakingNews'
-  // \n + t.co URL (23) + \n + hashtag
-  const suffixLen = 1 + 23 + 1 + hashtag.length
+  const suffixLen = 1 + 23 + 1 + hashtag.length  // \n + url(23) + \n + hashtag
   const maxBody   = 280 - suffixLen
 
   let body = title
   if (excerpt) {
     const withExcerpt = `${title}\n\n${excerpt}`
-    if (withExcerpt.length <= maxBody) {
-      body = withExcerpt
-    }
+    if (withExcerpt.length <= maxBody) body = withExcerpt
   }
-  if (body.length > maxBody) {
-    body = body.substring(0, maxBody - 1) + '…'
-  }
+  if (body.length > maxBody) body = body.substring(0, maxBody - 1) + '…'
 
   return `${body}\n${url}\n${hashtag}`
 }
