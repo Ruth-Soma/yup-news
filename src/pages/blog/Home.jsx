@@ -8,7 +8,7 @@ import { useHotPosts } from '@/hooks/useHotPosts'
 import { useGeoRegion } from '@/hooks/useGeoRegion'
 import { useFeaturedPosts } from '@/hooks/useFeaturedPosts'
 import { getMostReadPosts } from '@/lib/queries'
-import { timeAgo, readingTime, placeholderImage } from '@/lib/utils'
+import { timeAgo, readingTime, placeholderImage, flagEmoji, countryInfoFromPost } from '@/lib/utils'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -112,6 +112,7 @@ function FeaturedStory({ posts, fallbackPost }) {
               <span>{readingTime(post.content || post.excerpt || '')}</span>
               <span>·</span>
               <time>{timeAgo(post.published_at)}</time>
+              {(() => { const c = countryInfoFromPost(post); return c ? <><span>·</span><span title={c.name}>{flagEmoji(c.code)}</span></> : null })()}
             </div>
           </div>
           <div className="w-full aspect-[21/9] overflow-hidden">
@@ -166,6 +167,7 @@ function ArticleCard({ post, index }) {
         {post.source_name && <span>{post.source_name}</span>}
         {post.source_name && <span>·</span>}
         <span>{readingTime(post.content || post.excerpt || '')}</span>
+        {(() => { const c = countryInfoFromPost(post); return c ? <><span>·</span><span title={c.name}>{flagEmoji(c.code)}</span></> : null })()}
       </div>
     </Link>
   )
@@ -179,7 +181,8 @@ function LongReadItem({ post }) {
       className="group flex items-start gap-5 py-6 border-b border-g200 hover:bg-g100 transition-colors -mx-px px-px"
     >
       <div className="flex-1 min-w-0">
-        <div className="text-[0.62rem] font-mono uppercase tracking-[0.14em] text-g400 mb-2">
+        <div className="text-[0.62rem] font-mono uppercase tracking-[0.14em] text-g400 mb-2 flex items-center gap-1.5">
+          {(() => { const c = countryInfoFromPost(post); return c ? <span title={c.name}>{flagEmoji(c.code)}</span> : null })()}
           {post.region && `${post.region} · `}{post.category?.replace(/-/g, ' ')}
         </div>
         <h3 className="font-serif font-bold text-[1.15rem] leading-[1.28] tracking-[-0.01em] text-ink mb-1.5 group-hover:opacity-75 transition-opacity">

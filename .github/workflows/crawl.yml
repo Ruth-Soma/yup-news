@@ -2,8 +2,9 @@ name: News Crawler
 
 on:
   schedule:
-    # Runs every 5 minutes — GitHub Actions minimum; maximally fresh content
-    - cron: '*/5 * * * *'
+    # Backup trigger only — primary crawling is handled by pg_cron inside Supabase
+    # (every 5 min, guaranteed). GitHub Actions crons are delayed 30–60 min in practice.
+    - cron: '0 * * * *'
   workflow_dispatch: # allow manual trigger from GitHub Actions UI
 
 jobs:
