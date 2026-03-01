@@ -30,13 +30,17 @@ serve(async (req: Request) => {
     const shuffled = [...(feeds || [])].sort(() => Math.random() - 0.5)
     logs.push(`Found ${shuffled.length} active feeds`)
 
-    // 2. Load recent post titles for similarity dedup
+    // 2. Load recent post titles for similarity dedup + recent cover images to prevent reuse
     const { data: recent } = await supabase
-      .from('posts').select('title, slug')
+      .from('posts').select('title, slug, cover_image')
       .order('published_at', { ascending: false }).limit(200)
     const seenTitles: string[] = (recent || []).map((p: any) => p.title)
     const seenSlugs = new Set((recent || []).map((p: any) => p.slug))
-    logs.push(`Loaded ${seenTitles.length} existing titles for dedup`)
+    // Track cover images already used in DB so this run never reuses them
+    const globalUsedCoverUrls = new Set<string>(
+      (recent || []).map((p: any) => p.cover_image).filter(Boolean)
+    )
+    logs.push(`Loaded ${seenTitles.length} existing titles for dedup, ${globalUsedCoverUrls.size} used cover images`)
 
     // 3. Fetch RSS feeds in batches of 8 (avoids WORKER_LIMIT from too many concurrent connections)
     async function fetchFeed(feed: any) {
@@ -216,14 +220,17 @@ serve(async (req: Request) => {
       if (!aiResult) continue
 
       // Image: Pexels first (reliable, high-quality) → RSS image fallback
+      // Pass globalUsedCoverUrls so every article in this run gets a distinct photo
       let coverImage: string | null = null
       if (pexelsKey && aiResult.image_query) {
-        coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs)
+        coverImage = await fetchPexelsImage(aiResult.image_query, pexelsKey, logs, globalUsedCoverUrls)
       }
       // Only fall back to RSS image if Pexels failed and the URL is from a trusted image host
       if (!coverImage && item.image && isTrustedImageHost(item.image)) {
-        coverImage = item.image
+        if (!globalUsedCoverUrls.has(item.image)) coverImage = item.image
       }
+      // Register chosen cover so no other article this run gets the same photo
+      if (coverImage) globalUsedCoverUrls.add(coverImage)
 
       // Enrich content with inline images (skip if running low on time budget)
       const timeLeft = RUN_BUDGET_MS - (Date.now() - runStart)
@@ -537,7 +544,7 @@ function slugToLock(str: string): number {
 async function fetchPexelsImage(query: string, apiKey: string, logs: string[], usedUrls?: Set<string>): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&orientation=landscape`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=30&orientation=landscape`,
       {
         headers: { Authorization: apiKey },
         signal: AbortSignal.timeout(5000),
@@ -547,20 +554,18 @@ async function fetchPexelsImage(query: string, apiKey: string, logs: string[], u
     const data = await res.json()
     const photos: any[] = data.photos || []
     if (!photos.length) return null
-    // Randomise the starting index within the top 5 results so:
-    //   (a) the same post-type doesn't always get the same cover photo, and
-    //   (b) inline images can pick a different photo than the cover even for the same query
-    const pool = photos.slice(0, Math.min(photos.length, 10))
-    const startIdx = Math.floor(Math.random() * Math.min(5, pool.length))
-    const candidates = [...pool.slice(startIdx), ...pool.slice(0, startIdx)]
-    for (const photo of candidates) {
+    // Shuffle the full pool so repeated queries with the same keywords never return the same photo.
+    // usedUrls (loaded from DB + this run's picks) ensures uniqueness across articles.
+    const pool = photos.slice(0, Math.min(photos.length, 30))
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    for (const photo of shuffled) {
       const url = photo.src?.large2x || photo.src?.large || photo.src?.medium || null
       if (!url) continue
       if (usedUrls && usedUrls.has(url)) continue
       logs.push(`Pexels: ${url.substring(0, 60)}`)
       return url
     }
-    // All candidates exhausted — return the first available
+    // All shuffled candidates excluded — return the first non-null as last resort
     const fallback = pool[0]?.src?.large2x || pool[0]?.src?.large || null
     return fallback
   } catch (e: any) {

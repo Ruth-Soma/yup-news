@@ -155,9 +155,14 @@ async function uploadCoverImage(coverImageUrl: string | null | undefined): Promi
 
   try {
     // Step 1 — download the image
+    // Use a browser User-Agent — Pexels CDN and other hosts block custom bot agents
     const imgRes = await fetch(coverImageUrl, {
-      headers: { 'User-Agent': 'YUP-NewsBot/1.0' },
-      signal: AbortSignal.timeout(12000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/*,*/*;q=0.8',
+        'Referer': 'https://yup.ng/',
+      },
+      signal: AbortSignal.timeout(15000),
     })
     if (!imgRes.ok) {
       console.warn(`[image] Failed to fetch cover image (${imgRes.status}): ${coverImageUrl}`)
@@ -165,15 +170,19 @@ async function uploadCoverImage(coverImageUrl: string | null | undefined): Promi
     }
 
     const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg'
-    // Only upload supported image types
-    if (!contentType.startsWith('image/')) {
+    // Accept image/* or octet-stream (some CDNs serve raw bytes without a mime type)
+    const isImage = contentType.startsWith('image/') || contentType === 'application/octet-stream'
+    if (!isImage) {
       console.warn(`[image] Unsupported content-type: ${contentType}`)
       return null
     }
 
+    // Derive extension from content-type first, fall back to URL path
     const ext = contentType.includes('png')  ? 'png'
               : contentType.includes('gif')  ? 'gif'
               : contentType.includes('webp') ? 'webp'
+              : coverImageUrl.includes('.png')  ? 'png'
+              : coverImageUrl.includes('.webp') ? 'webp'
               : 'jpg'
     const filename = `news-${Date.now()}.${ext}`
     const imgBytes = await imgRes.arrayBuffer()
