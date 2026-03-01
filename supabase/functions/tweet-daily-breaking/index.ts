@@ -102,7 +102,7 @@ serve(async (req: Request) => {
       publishNow:  true,
       platforms:   [{ platform: 'twitter', accountId }],
     }
-    if (mediaArr) postBody.media = mediaArr
+    if (mediaArr) postBody.mediaItems = mediaArr
 
     const postRes = await fetch(`${LATE_BASE}/posts`, {
       method: 'POST',
@@ -222,7 +222,7 @@ async function uploadCoverImage(coverImageUrl: string | null | undefined): Promi
     }
 
     console.log(`[image] Uploaded successfully → ${publicUrl}`)
-    return [{ url: publicUrl }]
+    return [{ url: publicUrl, type: 'image' }]
 
   } catch (err: any) {
     console.warn(`[image] Upload skipped: ${err.message}`)
