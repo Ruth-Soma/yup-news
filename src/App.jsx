@@ -6,6 +6,10 @@ function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => {
     window.scrollTo(0, 0)
+    // Send pageview to GA4 on every SPA route change
+    if (window.gtag) {
+      window.gtag('event', 'page_view', { page_path: pathname })
+    }
   }, [pathname])
   return null
 }
