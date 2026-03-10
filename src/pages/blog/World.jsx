@@ -39,6 +39,7 @@ function PopularCard({ post, rank }) {
         <img
           src={post.cover_image || placeholderImage(post.category)}
           alt={post.title}
+          loading="lazy"
           className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
           onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderImage(post.category) }}
         />

@@ -142,6 +142,7 @@ function ArticleCard({ post, index }) {
         <img
           src={post.cover_image || placeholderImage(post.category)}
           alt={post.title}
+          loading="lazy"
           className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
           onError={e => { e.currentTarget.src = placeholderImage(post.category) }}
         />
@@ -201,6 +202,7 @@ function LongReadItem({ post }) {
         <img
           src={post.cover_image || placeholderImage(post.category)}
           alt=""
+          loading="lazy"
           className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500"
           onError={e => { e.currentTarget.src = placeholderImage(post.category) }}
         />

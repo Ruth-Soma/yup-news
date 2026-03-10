@@ -697,6 +697,7 @@ export default function Article() {
                       <img
                         src={p.cover_image || placeholderImage(p.category)}
                         alt={p.title}
+                        loading="lazy"
                         className="w-full h-full object-cover group-hover:opacity-85 transition-opacity"
                         onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderImage(p.category) }}
                       />
