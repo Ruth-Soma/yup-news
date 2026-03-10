@@ -6,6 +6,12 @@ services:
     staticPublishPath: ./dist
     pullRequestPreviewsEnabled: false
     routes:
+      - type: redirect
+        source: /sitemap.xml
+        destination: https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/sitemap
+      - type: redirect
+        source: /google-news-sitemap.xml
+        destination: https://clxwyydoeodozndyfkkv.supabase.co/functions/v1/google-news-sitemap
       - type: rewrite
         source: /*
         destination: /index.html
