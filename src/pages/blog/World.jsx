@@ -268,7 +268,7 @@ export default function World() {
             World News
           </h1>
           <p className="mt-3 text-[0.82rem] font-sans text-g500 font-light">
-            The most-read stories from around the globe, right now.
+            The latest stories from around the globe, right now.
           </p>
         </div>
 
@@ -276,7 +276,7 @@ export default function World() {
         <div className="py-10 border-b border-g200">
           <div className="flex items-center justify-between mb-7">
             <span className="text-[0.65rem] font-mono uppercase tracking-[0.18em] text-g500">
-              • Most Read
+              • Latest
             </span>
           </div>
 

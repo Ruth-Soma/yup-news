@@ -63,7 +63,6 @@ export async function getPopularPosts(limit = 9) {
     .from('posts')
     .select('id, title, slug, excerpt, cover_image, category, region, country, country_code, views, published_at')
     .eq('status', 'published')
-    .order('views', { ascending: false })
     .order('published_at', { ascending: false })
     .limit(limit)
   return { data, error }
